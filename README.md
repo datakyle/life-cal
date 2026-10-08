@@ -11,8 +11,10 @@ An open-source, self-hostable alternative to lifecalendar.io. It reads and write
 - **90-year grid** (configurable 1 to 120 years): 52 squares per row, one row per year of age, starting at your birthdate
 - **Multiple calendars**: "Where I have lived", "Work", "Education", relationships, whatever you like, each in its own tab
 - **Events with real dates**: give each chapter a name, start date, end date (or "still going"), and a color
+- **Milestones**: mark a single moment (got married, first marathon, adopted the dog) as a dot on its week, alongside your ranges
 - **Tap any week** to see the exact dates, your age, and what was happening
-- **Select weeks**: tap a first and last square to create an event covering that range
+- **Drag to select** on desktop: click and drag across squares to create an event covering that range
+- **Select weeks** on phones: tap a first and last square to do the same
 - **Lived vs. future**: past weeks shade in, the current week is outlined in red
 - **Import / Export** lifecalendar.io-compatible JSON backups
 - **Share links**: a read-only copy of one or all calendars, encoded in the URL (no server, nothing uploaded)
@@ -67,7 +69,9 @@ Share links carry the data inside the link itself. Anyone with the link can see 
                     "length": 90, "startDate": "1998-04-19", "displayEventLabels": true, "displayCalendarName": true },
       "events": [
         { "id": "...", "name": "California", "startDate": "1998-04-19", "endDate": "2003-05-23",
-          "color": { "kind": "preset", "name": "orange" } }
+          "color": { "kind": "preset", "name": "orange" } },
+        { "id": "...", "name": "Moved to Kansas City", "type": "milestone", "startDate": "2024-10-05",
+          "color": { "kind": "preset", "name": "rose" } }
       ]
     }
   ]
@@ -76,18 +80,12 @@ Share links carry the data inside the link itself. Anyone with the link can see 
 
 - Colors are Tailwind preset names (`orange`, `sky`, `teal`, ...) or `{ "kind": "custom", "hex": "#aabbcc" }`.
 - Leave out `endDate` for an ongoing event; it fills through the current week.
+- `"type": "milestone"` marks a single-date event, drawn as a dot. lifecalendar.io ignores this field, so on that site a milestone would show as an ongoing event.
 - Unknown fields from older backups are kept as-is.
 
 ## How weeks are counted
 
 Each row runs from one birthday to the next. Squares 1 to 51 are 7 days each; square 52 absorbs the 1 or 2 leftover days, so every year is exactly 52 squares and your birthday always starts a new row.
-
-## Ideas for next steps
-
-- iOS Shortcuts automation to refresh the wallpaper weekly
-- Milestone markers (single-week dots) in addition to ranges
-- Drag to select on desktop
-- Optional sync (GitHub Gist, Supabase) for multi-device use
 
 ## License
 

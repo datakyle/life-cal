@@ -79,6 +79,14 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .c.f{background:var(--ev);border-color:transparent}
 .c.now{outline:2px solid var(--now);outline-offset:1px}
 .c.sel{outline:2px solid var(--accent);outline-offset:1px}
+.c.m{position:relative}
+.c.m::after{content:"";position:absolute;inset:18%;border-radius:50%;background:var(--mk);box-shadow:0 0 0 1.5px var(--panel)}
+.c.rng{outline:2px solid var(--accent);outline-offset:0;box-shadow:inset 0 0 0 99px color-mix(in srgb,var(--accent) 30%,transparent)}
+.grid.dragging{cursor:crosshair;user-select:none;-webkit-user-select:none}
+.grid.dragging .c:hover{transform:none}
+.dot.ms,.lbl i.ms{border-radius:2px;transform:rotate(45deg) scale(.85)}
+.drag-tip{position:fixed;z-index:8;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(12px,12px)}
+.kind{margin-top:12px}
 .c:hover{transform:scale(1.7);position:relative;z-index:2}
 .view-only .c{cursor:default}
 .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:16px}
@@ -325,6 +333,14 @@ function cellRange(year, week, b){
 }
 
 /* ---------- data shape ---------- */
+// A milestone is a single moment (a wedding, a move-in day) shown as a dot on its week.
+// Stored as an ordinary event with type "milestone" and no endDate.
+const isMilestone = (e) => e && e.type === "milestone";
+const dotCls = (e) => isMilestone(e) ? "dot ms" : "dot";
+function eventWhen(e, fmt){
+  if (isMilestone(e)) return fmt(dn(e.startDate));
+  return `${fmt(dn(e.startDate))} – ${e.endDate ? fmt(dn(e.endDate)) : "now"}`;
+}
 function normalize(raw){
   if (!raw || !Array.isArray(raw.calendars)) throw new Error('This file does not look like a Life Calendar backup (no "calendars" list).');
   const prefs = Object.assign({ birthdate:null, timezone:defaultTZ(), displayPrecision:"week" }, raw.preferences || {});
@@ -343,7 +359,7 @@ function normalize(raw){
       ev.name = ev.name || "Untitled";
       ev.calendar = cal.id;
       ev.color = ev.color || {kind:"preset", name:"slate"};
-      if (!isISO(ev.endDate)) delete ev.endDate;
+      if (!isISO(ev.endDate) || isMilestone(ev)) delete ev.endDate;
       return ev;
     });
     return { calendar:cal, events };
@@ -382,7 +398,19 @@ function paint(c){
   const starts = new Map();
   const t = today();
   const evs = [...c.events].sort((a,z) => a.startDate.localeCompare(z.startDate));
+  const marks = new Array(total).fill(null);
   for (const e of evs){
+    if (isMilestone(e)){
+      const d = dn(e.startDate);
+      if (d < anniv(b, 0)) continue;
+      const i = cellOf(d, b).index;
+      if (i >= total) continue;
+      (marks[i] ||= []).push(e);
+      const row = Math.floor(i / WEEKS);
+      if (!starts.has(row)) starts.set(row, []);
+      starts.get(row).push(e);
+      continue;
+    }
     const s = Math.max(dn(e.startDate), anniv(b, 0));
     const en = e.endDate ? dn(e.endDate) : Math.max(t, s);
     if (en < s) continue;
@@ -395,7 +423,7 @@ function paint(c){
     starts.get(row).push(e);
   }
   const nowIdx = t < anniv(b,0) ? -1 : cellOf(t, b).index;
-  return { b, total, cells, starts, nowIdx, today:t };
+  return { b, total, cells, marks, starts, nowIdx, today:t };
 }
 
 /* ---------- rendering ---------- */
@@ -472,8 +500,9 @@ function renderToolbar(){
     `<span class="hint">${state.rangeStart === null ? "Tap the first week" : "Now tap the last week"}</span>`;
   $("toolbar").innerHTML = `
     <button type="button" class="primary only-desktop" data-act="newev">+ Event</button>
+    <button type="button" class="only-desktop" data-act="newms">+ Milestone</button>
     <button type="button" class="${state.rangeMode?"on":""}" data-act="range">${state.rangeMode ? "Cancel selecting" : "Select weeks"}</button>
-    ${rangeHint}
+    ${rangeHint || (canDrag() ? `<span class="hint only-desktop">Tip: drag across weeks to add a range</span>` : "")}
     <span class="sp"></span>
     <label>Zoom <input type="range" id="zoom" min="4" max="20" step="1" value="${state.zoom ?? autoCell()}"></label>
     <button type="button" data-act="editcal">Calendar settings</button>`;
@@ -482,8 +511,8 @@ function renderToolbar(){
 function renderEvents(){
   const evs = [...cal().events].sort((a,z) => a.startDate.localeCompare(z.startDate));
   $("eventList").innerHTML = evs.map(e =>
-    `<button type="button" class="chip" data-ev="${esc(e.id)}"><i class="dot" style="background:${colorHex(e.color)}"></i><b>${esc(e.name)}</b><span>${monthYr(dn(e.startDate))} – ${e.endDate ? monthYr(dn(e.endDate)) : "now"}</span></button>`
-  ).join("") || (state.viewOnly ? "" : `<span class="hint">No events yet. Add one, or tap "Select weeks" and tap two squares on the grid.</span>`);
+    `<button type="button" class="chip" data-ev="${esc(e.id)}"><i class="${dotCls(e)}" style="background:${colorHex(e.color)}"></i><b>${esc(e.name)}</b><span>${eventWhen(e, isMilestone(e) ? nice : monthYr)}</span></button>`
+  ).join("") || (state.viewOnly ? "" : `<span class="hint">No events yet. Add one, ${canDrag() ? "drag across weeks on the grid," : `or tap "Select weeks" and tap two squares,`} or add a milestone for a single moment.</span>`);
 }
 
 function autoCell(){
@@ -509,7 +538,7 @@ function renderGrid(){
   for (let w = 1; w <= WEEKS; w++) h += `<div class="wk">${!small || w === 1 || w % 4 === 0 ? w : ""}</div>`;
   for (let row = 0; row < c.length; row++){
     const evs = showLabels ? (p.starts.get(row) || []) : [];
-    const lbl = evs.map(e => `<span><i style="background:${colorHex(e.color)}"></i>${esc(e.name)}</span>`).join(" ");
+    const lbl = evs.map(e => `<span><i class="${isMilestone(e) ? "ms" : ""}" style="background:${colorHex(e.color)}"></i>${esc(e.name)}</span>`).join(" ");
     h += `<div class="lbl">${lbl}</div><div class="yr">${!small || size >= 7 || row % 5 === 0 ? row : ""}</div>`;
     for (let w = 0; w < WEEKS; w++){
       const i = row * WEEKS + w;
@@ -523,12 +552,19 @@ function renderGrid(){
           style = ` style="--ev:${a};background:linear-gradient(135deg,${b} 50%,${a} 50%)"`;
         } else style = ` style="--ev:${a}"`;
       } else if (i < p.nowIdx) cls += " p";
+      const mk = p.marks[i];
+      if (mk){
+        cls += " m";
+        const dotStyle = `--mk:${colorHex(mk[mk.length - 1].color)}`;
+        style = style ? style.replace('style="', `style="${dotStyle};`) : ` style="${dotStyle}"`;
+      }
       if (i === p.nowIdx) cls += " now";
       if (i === state.rangeStart) cls += " sel";
       h += `<div class="${cls}" data-i="${i}"${style}></div>`;
     }
   }
   $("grid").innerHTML = h;
+  state.cellEls = $("grid").querySelectorAll(".c");
 }
 
 /* ---------- dialogs ---------- */
@@ -566,17 +602,23 @@ function suggestColor(c){
 function openEventDialog(ev, preset = {}){
   const c = cal();
   const isNew = !ev;
-  const e = ev || { name:"", startDate:preset.start || "", endDate:preset.end || "", color:{kind:"preset", name:suggestColor(c)} };
-  const ongoing = !isNew && !e.endDate;
+  const e = ev || { name:"", startDate:preset.start || "", endDate:preset.end || "", color:{kind:"preset", name:suggestColor(c)},
+    type: preset.milestone ? "milestone" : undefined };
+  const ms = isMilestone(e);
+  const ongoing = !isNew && !ms && !e.endDate;
   openDialog(`
-    <h2>${isNew ? "New event" : "Edit event"}</h2>
+    <h2 id="fTitle"></h2>
     <p class="muted" style="margin:0">in ${esc(c.calendar.name)}</p>
-    <label>Name<input type="text" id="fName" value="${esc(e.name)}" placeholder="e.g. Kansas City, Finance Manager"></label>
-    <div class="row2">
-      <label>Start<input type="date" id="fStart" value="${esc(e.startDate || "")}"></label>
-      <label>End<input type="date" id="fEnd" value="${esc(e.endDate || "")}" ${ongoing ? "disabled" : ""}></label>
+    <div class="seg kind" role="radiogroup" aria-label="Kind">
+      <label><input type="radio" name="kind" value="range" ${ms ? "" : "checked"}><span>Range of weeks</span></label>
+      <label><input type="radio" name="kind" value="milestone" ${ms ? "checked" : ""}><span>Milestone</span></label>
     </div>
-    <label class="check"><input type="checkbox" id="fOngoing" ${ongoing ? "checked" : ""}> Still going (fills up to this week)</label>
+    <label>Name<input type="text" id="fName" value="${esc(e.name)}"></label>
+    <div class="row2">
+      <label><span id="fStartLbl">Start</span><input type="date" id="fStart" value="${esc(e.startDate || "")}"></label>
+      <label id="fEndWrap">End<input type="date" id="fEnd" value="${esc(e.endDate || "")}" ${ongoing ? "disabled" : ""}></label>
+    </div>
+    <label class="check" id="fOngoingWrap"><input type="checkbox" id="fOngoing" ${ongoing ? "checked" : ""}> Still going (fills up to this week)</label>
     <label>Color</label>${swatchesHTML(e.color)}
     <p class="err" id="fErr"></p>
     <div class="btns">
@@ -588,6 +630,17 @@ function openEventDialog(ev, preset = {}){
     bindCustomPicker(root);
     const ong = root.querySelector("#fOngoing"), end = root.querySelector("#fEnd");
     ong.addEventListener("change", () => { end.disabled = ong.checked; });
+    const kindIsMs = () => root.querySelector('input[name=kind]:checked').value === "milestone";
+    const syncKind = () => {
+      const m = kindIsMs();
+      root.querySelector("#fTitle").textContent = (isNew ? "New " : "Edit ") + (m ? "milestone" : "event");
+      root.querySelector("#fStartLbl").textContent = m ? "Date" : "Start";
+      root.querySelector("#fEndWrap").style.visibility = m ? "hidden" : "";
+      root.querySelector("#fOngoingWrap").hidden = m;
+      root.querySelector("#fName").placeholder = m ? "e.g. Got married, First marathon" : "e.g. Kansas City, Finance Manager";
+    };
+    root.querySelectorAll('input[name=kind]').forEach(r => r.addEventListener("change", syncKind));
+    syncKind();
     root.querySelector("#fCancel").onclick = closeDialog;
     root.querySelector("#fDel")?.addEventListener("click", () => {
       if (!confirm(`Delete "${e.name}"?`)) return;
@@ -597,15 +650,17 @@ function openEventDialog(ev, preset = {}){
     root.querySelector("#fSave").onclick = () => {
       const name = root.querySelector("#fName").value.trim();
       const s = root.querySelector("#fStart").value;
-      const en = ong.checked ? "" : end.value;
+      const m = kindIsMs();
+      const en = m || ong.checked ? "" : end.value;
       const err = root.querySelector("#fErr");
       if (!name) return err.textContent = "Give it a name.";
-      if (!isISO(s)) return err.textContent = "Pick a start date.";
-      if (!ong.checked && !isISO(en)) return err.textContent = "Pick an end date, or tick Still going.";
+      if (!isISO(s)) return err.textContent = m ? "Pick the date." : "Pick a start date.";
+      if (!m && !ong.checked && !isISO(en)) return err.textContent = "Pick an end date, or tick Still going.";
       if (en && en < s) return err.textContent = "End date is before the start date.";
       const now = new Date().toISOString();
       const target = ev || { id:newId(), calendar:c.calendar.id, createdAt:now };
       Object.assign(target, { name, startDate:s, color:readColor(root), updatedAt:now });
+      if (m) target.type = "milestone"; else delete target.type;
       if (en) target.endDate = en; else delete target.endDate;
       if (!ev) c.events.push(target);
       closeDialog(); commit();
@@ -620,13 +675,13 @@ function openWeekDialog(i){
   const { start, end } = cellRange(year, week, p.b);
   const diff = Math.round((start - (p.nowIdx >= 0 ? cellRange(Math.floor(p.nowIdx/WEEKS), p.nowIdx%WEEKS, p.b).start : p.today)) / 7);
   const rel = i === p.nowIdx ? "This week" : diff < 0 ? `${(-diff).toLocaleString()} weeks ago` : `${diff.toLocaleString()} weeks from now`;
-  const evs = p.cells[i] || [];
+  const evs = [...(p.marks[i] || []), ...(p.cells[i] || [])];
   openDialog(`
     <h2>Age ${year} · Week ${week + 1}</h2>
     <p class="muted" style="margin:0">${nice(start)} – ${nice(end)} · ${rel}</p>
     <div style="margin-top:12px">${evs.map(e => `
-      <div class="ev-row"><i class="dot" style="background:${colorHex(e.color)}"></i>
-        <div class="grow"><b>${esc(e.name)}</b><br><span class="muted">${nice(dn(e.startDate))} – ${e.endDate ? nice(dn(e.endDate)) : "now"}</span></div>
+      <div class="ev-row"><i class="${dotCls(e)}" style="background:${colorHex(e.color)}"></i>
+        <div class="grow"><b>${esc(e.name)}</b><br><span class="muted">${isMilestone(e) ? "Milestone · " : ""}${eventWhen(e, nice)}</span></div>
         ${state.viewOnly ? "" : `<button type="button" data-edit="${esc(e.id)}">Edit</button>`}
       </div>`).join("") || `<p class="muted">Nothing recorded for this week in ${esc(c.calendar.name)}.</p>`}
     </div>
@@ -640,8 +695,11 @@ function openWeekDialog(i){
     <div class="btns">
       <span class="sp"></span>
       <button type="button" id="wClose">Close</button>
-      ${state.viewOnly ? "" : `<button type="button" class="primary" id="wAdd">Add event from this week</button>`}
+      ${state.viewOnly ? "" : `<button type="button" id="wMs">Add milestone</button><button type="button" class="primary" id="wAdd">Add event from here</button>`}
     </div>`, root => {
+    // Milestone date defaults to today when this is the current week, otherwise the week's first day.
+    const msDate = i === p.nowIdx ? iso(p.today) : iso(start);
+    root.querySelector("#wMs")?.addEventListener("click", () => openEventDialog(null, { start:msDate, milestone:true }));
     root.querySelector("#wClose").onclick = closeDialog;
     root.querySelectorAll("[data-jump]").forEach(b => b.onclick = () => {
       const j = b.dataset.jump;
@@ -861,7 +919,7 @@ function drawWallpaper(canvas, o){
   const seen = new Set(), legend = [];
   [...c.events].sort((a, z) => a.startDate.localeCompare(z.startDate)).forEach(e => {
     const k = e.name + "|" + colorHex(e.color);
-    if (!seen.has(k)){ seen.add(k); legend.push({ name:e.name, hex:colorHex(e.color) }); }
+    if (!seen.has(k)){ seen.add(k); legend.push({ name:e.name, hex:colorHex(e.color), ms:isMilestone(e) }); }
   });
 
   // Lay out the legend into lines to know its height.
@@ -923,6 +981,14 @@ function drawWallpaper(canvas, o){
       ctx.globalAlpha = 1;
     }
   }
+  // Milestones: a dot slightly larger than the square, ringed in the background color so it reads on any fill.
+  for (let i = 0; i < p.total; i++){
+    const mk = p.marks[i]; if (!mk) continue;
+    const r = Math.floor(i / 52), w = i % 52;
+    const cx = x0 + w * pitch + cell / 2, cy = y + r * pitch + cell / 2, rr = cell * 0.72;
+    ctx.beginPath(); ctx.arc(cx, cy, rr + Math.max(1.5, 2.5 * u), 0, Math.PI * 2); ctx.fillStyle = T.bg; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fillStyle = colorHex(mk[mk.length - 1].color); ctx.fill();
+  }
   if (p.nowIdx >= 0 && p.nowIdx < p.total){
     const r = Math.floor(p.nowIdx / 52), w = p.nowIdx % 52;
     const x = x0 + w * pitch, yy = y + r * pitch, pad = Math.max(2, pitch * 0.22);
@@ -950,7 +1016,10 @@ function drawWallpaper(canvas, o){
       let x = (W - ln.w) / 2;
       const cy = y + lineH / 2;
       for (const it of ln.items){
-        ctx.fillStyle = it.hex; ctx.beginPath(); ctx.arc(x + dot / 2, cy, dot / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = it.hex; ctx.beginPath();
+        if (it.ms){ const q = dot * 0.6; ctx.moveTo(x + dot / 2, cy - q); ctx.lineTo(x + dot / 2 + q, cy); ctx.lineTo(x + dot / 2, cy + q); ctx.lineTo(x + dot / 2 - q, cy); ctx.closePath(); }
+        else ctx.arc(x + dot / 2, cy, dot / 2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.fillStyle = T.ink; ctx.fillText(it.label, x + dot + 12 * u, cy + 1);
         x += it.w + gapX;
       }
@@ -1109,7 +1178,7 @@ function compactForShare(which){
     calendars: pick.map(c => ({
       calendar:{ name:c.calendar.name, color:c.calendar.color, length:c.calendar.length, startDate:c.calendar.startDate,
         displayEventLabels:c.calendar.displayEventLabels, displayCalendarName:c.calendar.displayCalendarName },
-      events:c.events.map(e => { const o = { name:e.name, startDate:e.startDate, color:e.color }; if (e.endDate) o.endDate = e.endDate; return o; })
+      events:c.events.map(e => { const o = { name:e.name, startDate:e.startDate, color:e.color }; if (e.endDate) o.endDate = e.endDate; if (isMilestone(e)) o.type = "milestone"; return o; })
     }))
   };
 }
@@ -1159,6 +1228,7 @@ document.addEventListener("click", e => {
     case "newcal": openCalendarDialog(true); break;
     case "editcal": openCalendarDialog(false); break;
     case "newev": openEventDialog(null); break;
+    case "newms": openEventDialog(null, { start:iso(today()), milestone:true }); break;
     case "range": state.rangeMode = !state.rangeMode; state.rangeStart = null; renderToolbar(); renderGrid(); break;
     case "welcome": openWelcome(); break;
     case "import": $("fileInput").click(); break;
@@ -1175,7 +1245,68 @@ document.addEventListener("click", e => {
   }
 });
 
+/* Drag to select (mouse / trackpad / pen). Touch keeps scrolling and uses "Select weeks" instead. */
+function canDrag(){ return window.matchMedia("(hover: hover) and (pointer: fine)").matches; }
+const drag = { from:null, to:null, moved:false, suppressClick:false, tip:null, lit:[] };
+function cellIndexAt(x, y){
+  const el = document.elementFromPoint(x, y);
+  const c = el && el.closest && el.closest("#grid .c");
+  return c ? +c.dataset.i : null;
+}
+function rangeDates(a, z){
+  const b = state.paint.b;
+  const lo = Math.min(a, z), hi = Math.max(a, z);
+  return { s:cellRange(Math.floor(lo/WEEKS), lo%WEEKS, b).start, e:cellRange(Math.floor(hi/WEEKS), hi%WEEKS, b).end, n:hi - lo + 1 };
+}
+function lightRange(a, z){
+  drag.lit.forEach(i => state.cellEls[i]?.classList.remove("rng"));
+  drag.lit = [];
+  if (a === null) return;
+  const lo = Math.min(a, z), hi = Math.max(a, z);
+  for (let i = lo; i <= hi; i++){ state.cellEls[i]?.classList.add("rng"); drag.lit.push(i); }
+}
+function endDrag(){
+  lightRange(null);
+  $("grid").classList.remove("dragging");
+  drag.tip?.remove(); drag.tip = null;
+  drag.from = drag.to = null; drag.moved = false;
+}
+$("grid").addEventListener("pointerdown", e => {
+  if (state.viewOnly || state.rangeMode || e.pointerType === "touch" || e.button !== 0) return;
+  const cell = e.target.closest(".c"); if (!cell) return;
+  drag.from = drag.to = +cell.dataset.i; drag.moved = false;
+  e.preventDefault();
+});
+window.addEventListener("pointermove", e => {
+  if (drag.from === null) return;
+  const i = cellIndexAt(e.clientX, e.clientY);
+  if (i !== null && i !== drag.to){ drag.to = i; }
+  if (!drag.moved && drag.to !== drag.from){
+    drag.moved = true;
+    $("grid").classList.add("dragging");
+    drag.tip = document.createElement("div"); drag.tip.className = "drag-tip"; document.body.appendChild(drag.tip);
+  }
+  if (!drag.moved) return;
+  lightRange(drag.from, drag.to);
+  const r = rangeDates(drag.from, drag.to);
+  drag.tip.textContent = `${monthYr(r.s)} – ${monthYr(r.e)} · ${r.n.toLocaleString()} week${r.n === 1 ? "" : "s"}`;
+  drag.tip.style.left = e.clientX + "px"; drag.tip.style.top = e.clientY + "px";
+});
+window.addEventListener("pointerup", () => {
+  if (drag.from === null) return;
+  if (drag.moved){
+    const r = rangeDates(drag.from, drag.to);
+    drag.suppressClick = true;
+    setTimeout(() => { drag.suppressClick = false; }, 0);
+    endDrag();
+    openEventDialog(null, { start:iso(r.s), end:iso(r.e) });
+  } else endDrag();
+});
+window.addEventListener("keydown", e => { if (e.key === "Escape" && drag.from !== null) endDrag(); });
+window.addEventListener("blur", () => { if (drag.from !== null) endDrag(); });
+
 $("grid").addEventListener("click", e => {
+  if (drag.suppressClick){ drag.suppressClick = false; return; }
   const cell = e.target.closest(".c"); if (!cell) return;
   const i = +cell.dataset.i;
   if (state.rangeMode && !state.viewOnly){
