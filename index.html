@@ -27,6 +27,7 @@
   }
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px}
@@ -87,6 +88,26 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .dot.ms,.lbl i.ms{border-radius:2px;transform:rotate(45deg) scale(.85)}
 .drag-tip{position:fixed;z-index:8;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:4px 8px;border-radius:6px;white-space:nowrap;transform:translate(12px,12px)}
 .kind{margin-top:12px}
+.brand{flex-wrap:wrap}
+.save-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;margin-left:6px;letter-spacing:0}
+.save-pill[hidden]{display:none}
+.save-pill i{width:7px;height:7px;border-radius:50%;background:#16a34a}
+.save-pill.ok{color:var(--muted)}
+.save-pill.warn{color:#92400e;background:#fef3c7;border-color:#fcd34d}
+.save-pill.warn i{background:#f59e0b}
+.save-pill.bad{color:#991b1b;background:#fee2e2;border-color:#fca5a5}
+.save-pill.bad i{background:#dc2626}
+dialog h3{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:20px 0 4px}
+.sv-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.sv-row .grow{flex:1;min-width:0}
+.sv-row .muted{font-size:13px}
+.sv-row:first-of-type{border-top:none}
+.sv-dot{width:10px;height:10px;border-radius:50%;flex:none;background:#16a34a}
+.sv-dot.bad{background:#dc2626}
+.ok-txt{color:#16a34a;font-weight:600}
+.note{font-size:13px;background:#fef3c7;color:#78350f;border-radius:10px;padding:10px 12px;margin:12px 0 0}
+.snap-list{max-height:260px;overflow:auto}
+button.link{border:none;background:none;padding:0;text-decoration:underline;color:var(--ink);font-size:inherit}
 .c:hover{transform:scale(1.7);position:relative;z-index:2}
 .view-only .c{cursor:default}
 .foot{color:var(--muted);font-size:12px;text-align:center;margin-top:16px}
@@ -157,6 +178,12 @@ dialog.wide{width:min(720px,calc(100vw - 32px))}
   body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
   .top{padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:10px}
   .only-desktop{display:none!important}
+  .top{flex-wrap:nowrap;gap:8px}
+  .brand{white-space:nowrap;flex-wrap:nowrap;min-width:0}
+  .save-pill{margin-left:2px;padding:3px 8px}
+  .save-pill.ok span{display:none}
+  .save-pill.ok{padding:6px}
+  .actions{flex-wrap:nowrap}
   .only-mobile{display:inline-flex}
   main{padding:12px 12px 96px}
   .tabs{padding:10px 12px 0}
@@ -196,7 +223,8 @@ dialog.wide{width:min(720px,calc(100vw - 32px))}
 </head>
 <body>
 <header class="top no-print">
-  <div class="brand"><span class="logo"><i></i><i></i><i></i><i></i><i></i><i></i></span>Life in Weeks</div>
+  <div class="brand"><span class="logo"><i></i><i></i><i></i><i></i><i></i><i></i></span>Life in Weeks
+    <button type="button" id="saveStatus" class="save-pill ok" hidden aria-label="Saving and backups"></button></div>
   <div class="actions">
     <button id="btnWallpaper" type="button">Wallpaper</button>
     <button id="btnImport" type="button" class="only-desktop">Import</button>
@@ -385,8 +413,10 @@ const cal = () => state.data?.calendars[state.active];
 
 function save(){
   if (state.viewOnly || !state.data) return;
-  const ok = store.set(STORAGE_KEY, JSON.stringify(state.data));
+  const json = JSON.stringify(state.data);
+  const ok = store.set(STORAGE_KEY, json);
   $("storageWarn").hidden = ok;
+  saver.afterSave(json, ok);
 }
 function commit(){ save(); render(); }
 
@@ -439,6 +469,7 @@ function render(){
   $("btnSettings").hidden = state.viewOnly;
   $("fab").hidden = !has || state.viewOnly;
   renderTabs();
+  saver.renderStatus();
   if (!has){
     $("calHeader").innerHTML = ""; $("toolbar").innerHTML = ""; $("eventList").innerHTML = ""; $("grid").innerHTML = "";
     if (!state.data) renderEmpty();
@@ -644,6 +675,7 @@ function openEventDialog(ev, preset = {}){
     root.querySelector("#fCancel").onclick = closeDialog;
     root.querySelector("#fDel")?.addEventListener("click", () => {
       if (!confirm(`Delete "${e.name}"?`)) return;
+      saver.snapshot(`Before deleting "${e.name}"`);
       c.events = c.events.filter(x => x.id !== e.id);
       closeDialog(); commit();
     });
@@ -736,6 +768,7 @@ function openCalendarDialog(isNew){
     root.querySelector("#cCancel").onclick = closeDialog;
     root.querySelector("#cDel")?.addEventListener("click", () => {
       if (!confirm(`Delete "${k.name}" and its ${c.events.length} events? This can't be undone (unless you exported a backup).`)) return;
+      saver.snapshot(`Before deleting "${k.name}"`);
       state.data.calendars.splice(state.active, 1);
       state.active = Math.max(0, state.active - 1);
       closeDialog(); commit();
@@ -769,6 +802,7 @@ function openSettings(){
     <label>Birthdate<input type="date" id="sBirth" value="${esc(p.birthdate || "")}"></label>
     <label>Time zone<input type="text" id="sTz" value="${esc(p.timezone || defaultTZ())}" placeholder="America/Chicago"></label>
     <p class="muted" style="font-size:12px">Changing your birthdate also moves any calendar that started on the old one.</p>
+    ${state.data ? `<p style="margin:12px 0 0"><button type="button" id="sSaving">Saving &amp; backups…</button></p>` : ""}
     <p class="err" id="sErr"></p>
     <div class="btns">
       ${state.data ? `<button type="button" class="danger" id="sWipe">Erase all data</button>` : ""}
@@ -777,9 +811,13 @@ function openSettings(){
       <button type="button" class="primary" id="sSave">Save</button>
     </div>`, root => {
     root.querySelector("#sCancel").onclick = closeDialog;
+    root.querySelector("#sSaving")?.addEventListener("click", openSaving);
     root.querySelector("#sWipe")?.addEventListener("click", () => {
-      if (!confirm("Erase every calendar stored in this browser? Export first if you want a copy.")) return;
-      store.del(STORAGE_KEY); state.data = null; state.active = 0; closeDialog(); render();
+      if (!confirm("Erase every calendar and restore point stored in this browser? Download a backup first if you want a copy.")) return;
+      store.del(STORAGE_KEY); store.del(SNAP_KEY); store.del(META_KEY);
+      saver.meta = { lastSaved:0, lastBackup:0, lastChange:0, persisted:saver.meta.persisted };
+      saver.unlinkFile();
+      state.data = null; state.active = 0; closeDialog(); render();
     });
     root.querySelector("#sSave").onclick = () => {
       const b = root.querySelector("#sBirth").value, tz = root.querySelector("#sTz").value.trim() || defaultTZ();
@@ -836,6 +874,7 @@ function openMenu(){
       ${item("import", "↓", "Import backup", "Load a lifecalendar.io or Life in Weeks file", !state.viewOnly)}
       ${item("export", "↑", "Export backup", "Download all your calendars as JSON", !!state.data)}
       ${item("print", "⎙", "Print", "Poster layout of this calendar", has)}
+      ${item("saving", "✓", "Saving & backups", "Autosave, restore points, backup file", !!state.data && !state.viewOnly)}
       ${item("settings", "⚙", "Settings", "Birthdate and time zone", !state.viewOnly)}
     </div>
     <div class="btns"><button type="button" id="mClose">Close</button></div>`, root => {
@@ -848,6 +887,7 @@ function openMenu(){
       else if (a === "wallpaper") openWallpaper();
       else if (a === "share") openShare();
       else if (a === "settings") openSettings();
+      else if (a === "saving") openSaving();
     });
   });
 }
@@ -1105,6 +1145,260 @@ function openWallpaper(){
   }, { wide:true });
 }
 
+/* ==================================================================
+   Saving mode
+   - Autosave to this browser (localStorage) on every change
+   - Restore points: rolling snapshots + one before every risky action
+   - Asks the browser to keep data from being cleared (Storage API)
+   - Optional: keep a backup file on disk updated automatically
+     (File System Access API, Chrome/Edge desktop)
+   - Backup reminder when changes haven't been exported in a while
+   ================================================================== */
+const META_KEY = "life-in-weeks:meta";
+const SNAP_KEY = "life-in-weeks:snapshots";
+const SNAP_MAX = 15;
+const SNAP_EVERY = 10 * 60 * 1000;          // rolling snapshot at most every 10 minutes
+const REMIND_AFTER = 30 * DAY;              // nudge to back up after 30 days of unbacked changes
+
+const idb = {
+  open(){
+    return new Promise((res, rej) => {
+      if (!("indexedDB" in window)) return rej(new Error("no idb"));
+      const r = indexedDB.open("life-in-weeks", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+  },
+  async get(k){ try { const db = await this.open(); return await new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch { return undefined; } },
+  async set(k, v){ try { const db = await this.open(); await new Promise((res, rej) => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch { return false; } },
+  async del(k){ try { const db = await this.open(); await new Promise(res => { const t = db.transaction("kv", "readwrite"); t.objectStore("kv").delete(k); t.oncomplete = res; t.onerror = res; }); } catch {} }
+};
+
+const saver = {
+  meta:{ lastSaved:0, lastBackup:0, lastChange:0, persisted:null },
+  ok:true,
+  fileHandle:null,      // FileSystemFileHandle when a backup file is linked
+  filePerm:"none",      // none | granted | prompt
+  fileName:"",
+  lastFileWrite:0,
+  fileTimer:null,
+
+  loadMeta(){
+    try { Object.assign(this.meta, JSON.parse(store.get(META_KEY) || "{}")); } catch {}
+  },
+  saveMeta(){ store.set(META_KEY, JSON.stringify(this.meta)); },
+
+  snapshots(){
+    try { const s = JSON.parse(store.get(SNAP_KEY) || "[]"); return Array.isArray(s) ? s : []; } catch { return []; }
+  },
+  writeSnapshots(list){
+    // If storage is tight, drop the oldest restore points until it fits.
+    while (list.length){
+      if (store.set(SNAP_KEY, JSON.stringify(list))) return true;
+      list.shift();
+    }
+    store.del(SNAP_KEY); return false;
+  },
+  summarize(d){
+    const cals = d?.calendars || [];
+    const ev = cals.reduce((s, c) => s + (c.events?.length || 0), 0);
+    return `${cals.length} calendar${cals.length === 1 ? "" : "s"} · ${ev} event${ev === 1 ? "" : "s"}`;
+  },
+  // Take a restore point. reason = null for the rolling autosave snapshot.
+  snapshot(reason, json){
+    json = json || (state.data ? JSON.stringify(state.data) : null);
+    if (!json) return;
+    const list = this.snapshots();
+    const last = list[list.length - 1];
+    if (last && last.data === json){                   // same content: just relabel with the more specific reason
+      if (reason){ last.reason = reason; last.at = Date.now(); this.writeSnapshots(list); }
+      return;
+    }
+    list.push({ at:Date.now(), reason:reason || "Autosave", summary:this.summarize(JSON.parse(json)), data:json });
+    while (list.length > SNAP_MAX) list.shift();
+    this.writeSnapshots(list);
+  },
+  afterSave(json, ok){
+    this.ok = ok;
+    if (ok){
+      const now = Date.now();
+      this.meta.lastSaved = now; this.meta.lastChange = now; this.saveMeta();
+      const list = this.snapshots(), last = list[list.length - 1];
+      if (!last || now - last.at > SNAP_EVERY) this.snapshot(null, json);
+      // Ask once for durable storage, now that there's data worth keeping.
+      if (this.meta.persisted === false && !this.meta.persistAsked){
+        this.meta.persistAsked = true; this.saveMeta(); this.requestPersist();
+      }
+    }
+    this.queueFileWrite(json);
+    this.renderStatus();
+  },
+
+  /* ---- protect from automatic clearing ---- */
+  async checkPersisted(){
+    try { this.meta.persisted = navigator.storage?.persisted ? await navigator.storage.persisted() : null; }
+    catch { this.meta.persisted = null; }
+    return this.meta.persisted;
+  },
+  async requestPersist(){
+    try { this.meta.persisted = navigator.storage?.persist ? await navigator.storage.persist() : null; }
+    catch { this.meta.persisted = null; }
+    this.saveMeta(); this.renderStatus();
+    return this.meta.persisted;
+  },
+
+  /* ---- linked backup file (Chromium desktop) ---- */
+  fileSupported(){ return "showSaveFilePicker" in window && window.isSecureContext; },
+  async restoreFileLink(){
+    if (!this.fileSupported()) return;
+    const h = await idb.get("backupFile");
+    if (!h) return;
+    this.fileHandle = h; this.fileName = h.name;
+    try { this.filePerm = (await h.queryPermission({ mode:"readwrite" })) === "granted" ? "granted" : "prompt"; }
+    catch { this.filePerm = "prompt"; }
+    this.renderStatus();
+  },
+  async linkFile(){
+    try {
+      const h = await window.showSaveFilePicker({
+        suggestedName:"life-in-weeks-backup.json",
+        types:[{ description:"Life in Weeks backup", accept:{ "application/json":[".json"] } }]
+      });
+      this.fileHandle = h; this.fileName = h.name; this.filePerm = "granted";
+      await idb.set("backupFile", h);
+      await this.writeFile(JSON.stringify(state.data));
+      return true;
+    } catch (e){
+      if (e && e.name !== "AbortError") alert("Couldn't link that file: " + (e.message || e));
+      return false;
+    }
+  },
+  async reconnectFile(){
+    if (!this.fileHandle) return false;
+    try {
+      const p = await this.fileHandle.requestPermission({ mode:"readwrite" });
+      this.filePerm = p === "granted" ? "granted" : "prompt";
+      if (this.filePerm === "granted" && state.data) await this.writeFile(JSON.stringify(state.data));
+    } catch { this.filePerm = "prompt"; }
+    this.renderStatus();
+    return this.filePerm === "granted";
+  },
+  async unlinkFile(){
+    this.fileHandle = null; this.fileName = ""; this.filePerm = "none";
+    await idb.del("backupFile"); this.renderStatus();
+  },
+  queueFileWrite(json){
+    if (!this.fileHandle || this.filePerm !== "granted") return;
+    clearTimeout(this.fileTimer);
+    this.fileTimer = setTimeout(() => this.writeFile(json), 1500);
+  },
+  async writeFile(json){
+    if (!this.fileHandle || !json) return;
+    try {
+      const out = JSON.stringify(Object.assign(JSON.parse(json), { exportedAt:new Date().toISOString() }), null, 2);
+      const w = await this.fileHandle.createWritable();
+      await w.write(out); await w.close();
+      this.lastFileWrite = Date.now();
+      this.meta.lastBackup = Date.now(); this.saveMeta();
+    } catch (e){
+      this.filePerm = "prompt";
+    }
+    this.renderStatus();
+  },
+
+  /* ---- status pill ---- */
+  needsBackup(){
+    if (!state.data || this.fileHandle) return false;
+    const changedSinceBackup = this.meta.lastChange > (this.meta.lastBackup || 0);
+    const since = this.meta.lastBackup || this.firstChange();
+    return changedSinceBackup && Date.now() - since > REMIND_AFTER;
+  },
+  firstChange(){ const s = this.snapshots()[0]; return s ? s.at : this.meta.lastChange; },
+  renderStatus(){
+    const el = $("saveStatus"); if (!el) return;
+    if (state.viewOnly || !state.data){ el.hidden = true; return; }
+    el.hidden = false;
+    let cls = "ok", text = "Saved", title = "Saved in this browser";
+    if (!this.ok){ cls = "bad"; text = "Not saving"; title = "This browser is blocking storage. Export a backup."; }
+    else if (this.fileHandle && this.filePerm === "prompt"){ cls = "warn"; text = "Reconnect file"; title = "Allow access again to keep your backup file updated"; }
+    else if (this.needsBackup()){ cls = "warn"; text = "Back up"; title = "You have changes that aren't in a backup file yet"; }
+    else if (this.fileHandle){ text = "Saved + file"; title = `Saved in this browser and to ${this.fileName}`; }
+    el.className = "save-pill " + cls;
+    el.innerHTML = `<i></i><span>${text}</span>`;
+    el.title = title + (this.meta.lastSaved ? ` · last change ${ago(this.meta.lastSaved)}` : "");
+  }
+};
+
+function ago(t){
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 45) return "just now";
+  const m = Math.round(s / 60); if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} hr${h === 1 ? "" : "s"} ago`;
+  const d = Math.round(h / 24); if (d < 31) return `${d} day${d === 1 ? "" : "s"} ago`;
+  return new Date(t).toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" });
+}
+const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia?.("(display-mode: standalone)").matches || navigator.standalone === true;
+
+function openSaving(){
+  const m = saver.meta, snaps = saver.snapshots().slice().reverse();
+  const persistedRow = m.persisted === true
+    ? `<span class="ok-txt">Protected.</span> Your browser won't clear it on its own.`
+    : m.persisted === false
+      ? `Your browser may clear site data it thinks is unused. <button type="button" id="svPersist" class="link">Ask to keep it</button>`
+      : `This browser doesn't say whether it keeps site data long term. Back up now and then.`;
+  const iosTip = isIOS() && !isStandalone()
+    ? `<p class="note">On iPhone, Safari can erase a website's saved data after about a week without a visit. <b>Add this app to your Home Screen</b> (Share → Add to Home Screen) so your calendars are kept.</p>` : "";
+  const fileBlock = !saver.fileSupported() ? "" : saver.fileHandle
+    ? `<div class="sv-row"><div class="grow"><b>Backup file</b><br><span class="muted">${esc(saver.fileName)} · ${saver.filePerm === "granted" ? (saver.lastFileWrite ? `updated ${ago(saver.lastFileWrite)}` : "linked") : "needs permission again"}</span></div>
+         ${saver.filePerm !== "granted" ? `<button type="button" id="svReconnect" class="primary">Reconnect</button>` : ""}
+         <button type="button" id="svUnlink">Unlink</button></div>`
+    : `<div class="sv-row"><div class="grow"><b>Keep a backup file updated</b><br><span class="muted">Pick a file on this computer (iCloud Drive, Dropbox or OneDrive folders work too). Every change is written to it automatically.</span></div>
+         <button type="button" id="svLink">Choose file</button></div>`;
+  openDialog(`
+    <h2>Saving</h2>
+    <div class="sv-row"><span class="sv-dot ${saver.ok ? "ok" : "bad"}"></span>
+      <div class="grow"><b>${saver.ok ? "Autosave is on" : "This browser isn't saving"}</b><br>
+      <span class="muted">${saver.ok
+        ? `Every change is saved in this browser on this device${m.lastSaved ? `, last ${ago(m.lastSaved)}` : ""}. Nothing is uploaded.`
+        : `Private browsing or blocked storage. Download a backup before you close this tab.`}</span></div></div>
+    ${saver.ok ? `<p class="muted" style="font-size:13px;margin:6px 0 0">${persistedRow}</p>` : ""}
+    ${iosTip}
+    <h3>Backups</h3>
+    <div class="sv-row"><div class="grow"><b>Download a backup</b><br><span class="muted">${m.lastBackup ? `Last backup ${ago(m.lastBackup)}` : "No backup yet"}. Use it to move to another device, too.</span></div>
+      <button type="button" id="svExport" class="${saver.needsBackup() || !m.lastBackup ? "primary" : ""}">Download</button></div>
+    ${fileBlock}
+    <h3>Restore points</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 4px">Saved automatically as you work and before imports, restores and deletes. Kept in this browser only.</p>
+    <div class="snap-list">${snaps.length ? snaps.map((s, k) => `
+      <div class="sv-row"><div class="grow"><b>${esc(s.reason)}</b><br><span class="muted">${new Date(s.at).toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })} · ${esc(s.summary)}</span></div>
+        <button type="button" data-restore="${snaps.length - 1 - k}">Restore</button></div>`).join("")
+      : `<p class="muted">None yet. They appear as you make changes.</p>`}</div>
+    <div class="btns"><span class="sp"></span><button type="button" id="svClose">Done</button></div>`, root => {
+    root.querySelector("#svClose").onclick = closeDialog;
+    root.querySelector("#svExport").onclick = () => { exportJSON(); openSaving(); };
+    root.querySelector("#svPersist")?.addEventListener("click", async () => {
+      const r = await saver.requestPersist();
+      if (r === false) alert("The browser declined for now. Browsers usually allow it once a site is installed or used regularly. Adding it to your Home Screen or bookmarking it helps.");
+      openSaving();
+    });
+    root.querySelector("#svLink")?.addEventListener("click", async () => { if (await saver.linkFile()) openSaving(); });
+    root.querySelector("#svReconnect")?.addEventListener("click", async () => { await saver.reconnectFile(); openSaving(); });
+    root.querySelector("#svUnlink")?.addEventListener("click", async () => { await saver.unlinkFile(); openSaving(); });
+    root.querySelectorAll("[data-restore]").forEach(b => b.onclick = () => {
+      const s = saver.snapshots()[+b.dataset.restore];
+      if (!s) return;
+      if (!confirm(`Restore "${s.reason}" from ${new Date(s.at).toLocaleString()}? Your current version is kept as a restore point too.`)) return;
+      try {
+        const restored = normalize(JSON.parse(s.data));
+        saver.snapshot("Before restore");
+        state.data = restored; state.active = 0;
+        closeDialog(); commit();
+      } catch { alert("That restore point couldn't be read."); }
+    });
+  });
+}
+
 /* ---------- import / export / share ---------- */
 async function handleFile(file){
   let incoming;
@@ -1123,8 +1417,9 @@ async function handleFile(file){
       <button type="button" class="primary" id="iReplace">Replace everything</button>
     </div>`, root => {
     root.querySelector("#iCancel").onclick = closeDialog;
-    root.querySelector("#iReplace").onclick = () => { state.data = incoming; state.active = 0; closeDialog(); commit(); };
+    root.querySelector("#iReplace").onclick = () => { saver.snapshot("Before import"); state.data = incoming; state.active = 0; closeDialog(); commit(); };
     root.querySelector("#iAdd").onclick = () => {
+      saver.snapshot("Before import");
       const ids = new Set(state.data.calendars.map(c => c.calendar.id));
       incoming.calendars.forEach(c => {
         if (ids.has(c.calendar.id)){ c.calendar.id = newId(); c.events.forEach(e => e.calendar = c.calendar.id); }
@@ -1143,6 +1438,7 @@ function exportJSON(){
   a.download = `life-calendars-backup-${iso(today())}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  saver.meta.lastBackup = Date.now(); saver.saveMeta(); saver.renderStatus();
 }
 
 function b64u(bytes){
@@ -1235,6 +1531,7 @@ document.addEventListener("click", e => {
     case "sample": state.data = normalize(JSON.parse(JSON.stringify(SAMPLE))); state.active = 0; commit(); break;
     case "keep": {
       const shared = state.data;
+      { const mine = store.get(STORAGE_KEY); if (mine) saver.snapshot("Before adding a shared calendar", mine); }
       history.replaceState(null, "", location.pathname + location.search);
       state.viewOnly = false; loadLocal();
       if (!state.data) state.data = shared;
@@ -1341,6 +1638,16 @@ $("btnPrint").onclick = () => window.print();
 $("btnSettings").onclick = openSettings;
 $("btnWallpaper").onclick = openWallpaper;
 $("btnMenu").onclick = openMenu;
+$("saveStatus").onclick = async () => {
+  if (saver.fileHandle && saver.filePerm === "prompt"){ await saver.reconnectFile(); }
+  openSaving();
+};
+// Refresh the "x min ago" text and backup reminder now and then.
+setInterval(() => saver.renderStatus(), 60000);
+// Write any pending file save before the tab goes away.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && saver.fileTimer && state.data){ clearTimeout(saver.fileTimer); saver.writeFile(JSON.stringify(state.data)); }
+});
 
 let resizeT;
 window.addEventListener("resize", () => {
@@ -1352,6 +1659,7 @@ window.addEventListener("hashchange", async () => {
 });
 
 async function init(){
+  saver.loadMeta();
   const z = parseInt(store.get(ZOOM_KEY), 10);
   state.zoom = Number.isFinite(z) ? z : null;
   state.viewOnly = false;
@@ -1361,8 +1669,21 @@ async function init(){
   }
   if (!state.viewOnly) loadLocal();
   render();
+  saver.renderStatus();
+  if (!state.viewOnly){
+    await saver.checkPersisted();
+    if (state.data && saver.meta.persisted === false && !saver.meta.persistAsked){
+      saver.meta.persistAsked = true; saver.saveMeta(); saver.requestPersist();
+    }
+    saver.restoreFileLink();
+  }
 }
 init();
+
+// Offline support: cache the app so it opens without a connection (needs https or localhost).
+if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:"){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 </script>
 </body>
 </html>

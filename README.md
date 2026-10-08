@@ -16,6 +16,8 @@ An open-source, self-hostable alternative to lifecalendar.io. It reads and write
 - **Drag to select** on desktop: click and drag across squares to create an event covering that range
 - **Select weeks** on phones: tap a first and last square to do the same
 - **Lived vs. future**: past weeks shade in, the current week is outlined in red
+- **Saving mode**: autosaves to your browser on every change, with a status badge, restore points, backup reminders, and an optional backup file that updates itself
+- **Works offline** once it's been opened (and added to your Home Screen)
 - **Import / Export** lifecalendar.io-compatible JSON backups
 - **Share links**: a read-only copy of one or all calendars, encoded in the URL (no server, nothing uploaded)
 - **Phone wallpapers**: export a PNG sized for your iPhone (or Android), with a lock-screen layout that keeps the clock area clear, four styles, a color legend, week count, and an optional caption
@@ -40,7 +42,7 @@ Just open `index.html` in a browser. That's it.
 ## Publish on GitHub Pages
 
 1. Create a new repository on GitHub (for example `life-in-weeks`).
-2. Upload every file in this folder (`index.html`, `manifest.webmanifest`, `icon-180.png`, `icon-512.png`, `README.md`, `LICENSE`, `example-backup.json`) to the repo root.
+2. Upload every file in this folder (`index.html`, `sw.js`, `manifest.webmanifest`, `icon-180.png`, `icon-512.png`, `README.md`, `LICENSE`, `example-backup.json`) to the repo root.
 3. Go to **Settings > Pages**, set **Source** to "Deploy from a branch", choose `main` and `/ (root)`, and save.
 4. In a minute your app is live at `https://<your-username>.github.io/life-in-weeks/`.
 
@@ -50,9 +52,25 @@ Live demo: **https://datakyle.github.io/life-cal/**
 
 Click **Import** and pick your `life-calendars-backup.json`. Choose **Replace everything** or **Add alongside mine**. Use **Export** anytime to download a fresh backup in the same format.
 
-## Where data lives
+## Saving your progress
 
-Your calendars are saved in your browser's local storage on that device. Nothing is sent to a server. Clearing site data erases them, so export a backup now and then.
+Everything you do is saved automatically in your browser, on your device. Nothing is uploaded and there's no account. The badge next to the title tells you where things stand:
+
+- **Green dot / Saved**: your latest change is stored in this browser.
+- **Back up** (amber): you've made changes over the last 30+ days that aren't in a backup file yet.
+- **Reconnect file** (amber): your linked backup file needs permission again (browsers ask after a restart).
+- **Not saving** (red): the browser is blocking storage (often private browsing). Download a backup before closing the tab.
+
+Tap the badge (or **••• → Saving & backups** on a phone) for:
+
+- **Restore points**: up to 15 earlier versions, taken as you work and right before imports, restores and deletes. One tap rolls back.
+- **Download a backup**: a JSON file you can keep, move to another device, or re-import.
+- **Keep a backup file updated** (Chrome and Edge on desktop): pick a file once, for example in an iCloud Drive, Dropbox or OneDrive folder, and every change is written to it automatically.
+- **Protected storage**: the app asks the browser not to clear its data on its own, and shows whether that was granted.
+
+**iPhone tip:** Safari can erase a website's saved data after about a week without a visit. Add the app to your Home Screen (Share → Add to Home Screen) and it keeps your data and works offline. Downloading a backup now and then is still a good habit.
+
+Data stays on the device and browser where you entered it. To use another device, download a backup and import it there.
 
 Share links carry the data inside the link itself. Anyone with the link can see your birthdate and the events you chose to share.
 
