@@ -2,8 +2,8 @@
    Serves the app from cache so it opens without a connection, and refreshes
    the cache in the background so updates show up on the next launch.
    Your calendar data is NOT stored here; it lives in the browser's local storage. */
-const CACHE = "life-in-weeks-v1";
-const SHELL = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-512.png"];
+const CACHE = "life-in-weeks-v2";
+const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "favicon-32.png", "icon-180.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
