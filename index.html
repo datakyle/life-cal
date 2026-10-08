@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Life in Weeks</title>
+<meta name="description" content="Visualize your life in weeks. Every row is a year, every square is a week.">
+<meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Weeks">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+:root{
+  --bg:#fafaf9; --panel:#ffffff; --ink:#1c1917; --muted:#78716c; --line:#e7e5e4;
+  --lived:#d6d3d1; --cell-border:#d6d3d1; --accent:#1c1917; --now:#ef4444; --danger:#dc2626;
+  --cell:12px; --gap:2px; --lw:120px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0c0a09; --panel:#1c1917; --ink:#f5f5f4; --muted:#a8a29e; --line:#292524;
+    --lived:#44403c; --cell-border:#3f3a36; --accent:#f5f5f4;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+button.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+button.ghost{border-color:transparent;background:transparent}
+button.on{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+input[type=text],input[type=date],input[type=number],select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+.brand{font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+.logo{display:grid;grid-template-columns:repeat(3,5px);gap:2px}
+.logo i{width:5px;height:5px;border-radius:1px;background:var(--ink)}
+.logo i:nth-child(n+5){background:transparent;outline:1px solid var(--muted);outline-offset:-1px}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.banner{padding:10px 16px;background:#fef3c7;color:#78350f;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner button{background:#fff;color:#78350f}
+
+main{max-width:1100px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:12px 16px 0;max-width:1100px;margin:0 auto}
+.tab{white-space:nowrap;display:flex;align-items:center;gap:6px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+
+.cal-header{text-align:center;margin:8px 0 14px}
+.cal-header h1{margin:0;font-size:22px;letter-spacing:.18em;text-transform:uppercase}
+.sub{margin:4px 0 0;color:var(--muted);font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.stats{margin:6px 0 0;font-size:13px;color:var(--muted)}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.toolbar .sp{flex:1}
+.toolbar label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.hint{font-size:13px;color:var(--muted)}
+
+.event-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{display:flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:13px}
+.chip span{color:var(--muted)}
+
+.grid-wrap{overflow-x:auto;padding:4px 0 12px}
+.grid{display:grid;grid-template-columns:var(--lw) 24px repeat(52,var(--cell));gap:var(--gap);align-items:center;width:max-content;margin:0 auto}
+.wk,.yr,.lbl{font-size:max(7px,min(10px,calc(var(--cell) * .8)));color:var(--muted);height:var(--cell);line-height:var(--cell);white-space:nowrap}
+.wk{text-align:center;overflow:visible}
+.yr{text-align:right;padding-right:4px;font-variant-numeric:tabular-nums}
+.lbl{text-align:right;overflow:visible;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);direction:rtl}
+.lbl span{direction:ltr;unicode-bidi:isolate}
+.lbl i{display:inline-block;width:6px;height:6px;border-radius:50%;margin:0 4px;vertical-align:middle}
+.c{width:var(--cell);height:var(--cell);border:1px solid var(--cell-border);border-radius:2px;cursor:pointer;transition:transform .08s}
+.c.p{background:var(--lived);border-color:var(--lived)}
+.c.f{background:var(--ev);border-color:transparent}
+.c.now{outline:2px solid var(--now);outline-offset:1px}
+.c.sel{outline:2px solid var(--accent);outline-offset:1px}
+.c:hover{transform:scale(1.7);position:relative;z-index:2}
+.view-only .c{cursor:default}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:16px}
+
+.empty{max-width:440px;margin:48px auto;text-align:center}
+.empty .btns{justify-content:center}
+
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:20px;width:min(460px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+dialog h2{margin:0 0 4px;font-size:18px}
+dialog label{display:block;margin:12px 0 0;font-size:13px;color:var(--muted)}
+dialog label > input,dialog label > select{margin-top:4px;color:var(--ink)}
+dialog label.check{display:flex;gap:8px;align-items:center;color:var(--ink)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btns{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.btns .sp{flex:1}
+.muted{color:var(--muted)}
+.err{color:var(--danger);font-size:13px;min-height:1em;margin:8px 0 0}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.sw{position:relative;margin:0!important}
+.sw input{position:absolute;opacity:0;pointer-events:none}
+.sw span{display:block;width:26px;height:26px;border-radius:50%;border:2px solid transparent;box-shadow:inset 0 0 0 2px var(--panel)}
+.sw input:checked + span{border-color:var(--ink)}
+.sw input:focus-visible + span{outline:2px solid var(--accent)}
+.sw.custom{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:12px}
+.sw.custom input[type=color]{position:static;opacity:1;pointer-events:auto;width:30px;height:26px;padding:0;border:none;background:none}
+.ev-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.ev-row .grow{flex:1}
+textarea{width:100%;min-height:90px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font:12px ui-monospace,monospace;color:var(--ink)}
+
+/* ---------- progress, menu, fab ---------- */
+.progress{height:6px;max-width:320px;margin:10px auto 0;border-radius:999px;background:var(--line);overflow:hidden}
+.progress i{display:block;height:100%;background:var(--ink);border-radius:999px}
+.only-mobile{display:none}
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(18px + env(safe-area-inset-bottom));
+  width:58px;height:58px;border-radius:50%;font-size:30px;line-height:1;padding:0;z-index:6;align-items:center;justify-content:center;
+  background:var(--accent);color:var(--bg);border:none;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.fab[hidden]{display:none}
+.menu-list{display:flex;flex-direction:column;margin-top:8px}
+.menu-list button{display:flex;align-items:center;gap:12px;text-align:left;border:none;border-top:1px solid var(--line);border-radius:0;background:transparent;padding:14px 4px;font-size:16px}
+.menu-list button:first-child{border-top:none}
+.menu-list small{display:block;color:var(--muted);font-size:13px}
+.menu-list .ico{width:28px;text-align:center;font-size:18px}
+.nav-week{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:14px}
+.nav-week button{padding:8px 0;font-size:13px}
+
+/* ---------- wallpaper ---------- */
+.wp-wrap{display:grid;grid-template-columns:1fr 200px;gap:16px;align-items:start}
+.wp-preview{position:sticky;top:0;text-align:center}
+.wp-preview img{width:100%;border-radius:22px;border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.18);display:block;background:var(--line);aspect-ratio:var(--ar,9/19.5)}
+.wp-preview p{font-size:12px;color:var(--muted);margin:8px 0 0}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:4px}
+.seg label{flex:1;margin:0!important;text-align:center;position:relative}
+.seg input{position:absolute;opacity:0}
+.seg span{display:block;padding:8px 4px;font-size:13px;color:var(--ink)}
+.seg input:checked + span{background:var(--accent);color:var(--bg)}
+.theme-row{display:flex;gap:8px;margin-top:6px}
+.theme-row label{margin:0!important;position:relative}
+.theme-row input{position:absolute;opacity:0}
+.theme-row span{display:block;width:44px;height:44px;border-radius:12px;border:2px solid var(--line)}
+.theme-row input:checked + span{border-color:var(--ink);box-shadow:0 0 0 2px var(--bg) inset}
+dialog.wide{width:min(720px,calc(100vw - 32px))}
+
+@media (hover:none){ .c:hover{transform:none} }
+
+@media (max-width:640px){
+  :root{--lw:64px}
+  body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  .top{padding-top:calc(10px + env(safe-area-inset-top));padding-bottom:10px}
+  .only-desktop{display:none!important}
+  .only-mobile{display:inline-flex}
+  main{padding:12px 12px 96px}
+  .tabs{padding:10px 12px 0}
+  .tab{min-height:40px;padding:8px 14px}
+  .cal-header h1{font-size:18px}
+  .event-list{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -12px 12px;padding:0 12px 4px;-webkit-overflow-scrolling:touch}
+  .chip{flex:none;scroll-snap-align:start;min-height:38px}
+  .toolbar button{min-height:40px}
+  .toolbar label{width:100%}
+  .toolbar label input{flex:1}
+  input[type=text],input[type=date],input[type=number],select,textarea{font-size:16px}
+  dialog,dialog.wide{margin:auto 0 0;width:100vw;max-width:100vw;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;border-bottom:none;
+    padding:22px 16px calc(20px + env(safe-area-inset-bottom));animation:sheet .22s ease-out}
+  dialog::before{content:"";display:block;width:40px;height:5px;border-radius:3px;background:var(--line);margin:-10px auto 14px}
+  .btns button{min-height:44px;flex:1}
+  .btns .sp{display:none}
+  .wp-wrap{grid-template-columns:1fr}
+  .wp-preview{position:static;order:-1}
+  .wp-preview img{width:min(180px,48vw);margin:0 auto}
+}
+@keyframes sheet{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+
+@media print{
+  @page{size:letter portrait;margin:.4in}
+  :root,:root:not([data-theme="light"]){--bg:#fff;--panel:#fff;--ink:#111;--muted:#666;--lived:#d4d4d4;--cell-border:#bbb}
+  .no-print{display:none!important}
+  body{background:#fff}
+  main{padding:0;max-width:none}
+  #grid{--cell:9px !important;--gap:1px !important;--lw:110px !important}
+  .grid-wrap{overflow:visible}
+  .c{border-width:.5px}
+  .c.now{outline-width:1px}
+  .c:hover{transform:none}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<header class="top no-print">
+  <div class="brand"><span class="logo"><i></i><i></i><i></i><i></i><i></i><i></i></span>Life in Weeks</div>
+  <div class="actions">
+    <button id="btnWallpaper" type="button">Wallpaper</button>
+    <button id="btnImport" type="button" class="only-desktop">Import</button>
+    <button id="btnExport" type="button" class="only-desktop">Export</button>
+    <button id="btnShare" type="button" class="only-desktop">Share</button>
+    <button id="btnPrint" type="button" class="only-desktop">Print</button>
+    <button id="btnSettings" type="button" class="only-desktop">Settings</button>
+    <button id="btnMenu" type="button" class="only-mobile" aria-label="More">•••</button>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+</header>
+<div id="banner" class="banner no-print" hidden></div>
+<div id="storageWarn" class="banner no-print" hidden>
+  This browser isn't saving your changes (private mode or storage blocked). Use Export to keep a backup.
+</div>
+<nav id="tabs" class="tabs no-print"></nav>
+<main id="main">
+  <section id="calHeader" class="cal-header"></section>
+  <section id="toolbar" class="toolbar no-print"></section>
+  <section id="eventList" class="event-list no-print"></section>
+  <div class="grid-wrap" id="gridWrap"><div id="grid" class="grid"></div></div>
+  <p class="foot no-print">Your data stays in this browser. Export a backup now and then.</p>
+</main>
+<button id="fab" class="fab no-print only-mobile" type="button" aria-label="Add event" data-act="newev" hidden>+</button>
+<dialog id="dlg"><div id="dlgBody"></div></dialog>
+
+<script>
+"use strict";
+/* ==================================================================
+   Life in Weeks: an open-source life calendar.
+   Data format is compatible with lifecalendar.io JSON backups.
+   ================================================================== */
+
+const STORAGE_KEY = "life-in-weeks:data:v1";
+const ZOOM_KEY = "life-in-weeks:zoom";
+const DAY = 86400000;
+const WEEKS = 52;
+
+const PRESETS = {
+  slate:"#64748b", gray:"#6b7280", zinc:"#71717a", neutral:"#737373", stone:"#78716c",
+  red:"#ef4444", orange:"#f97316", amber:"#f59e0b", yellow:"#eab308", lime:"#84cc16",
+  green:"#22c55e", emerald:"#10b981", teal:"#14b8a6", cyan:"#06b6d4", sky:"#0ea5e9",
+  blue:"#3b82f6", indigo:"#6366f1", violet:"#8b5cf6", purple:"#a855f7", fuchsia:"#d946ef",
+  pink:"#ec4899", rose:"#f43f5e"
+};
+const SWATCH_ORDER = ["orange","amber","yellow","lime","green","teal","cyan","sky","blue",
+  "indigo","violet","purple","pink","rose","red","slate","stone"];
+
+const SAMPLE = {
+  format:"lifecalendar.io", version:1,
+  preferences:{ birthdate:"1995-06-12", timezone:"America/Chicago", displayPrecision:"week" },
+  calendars:[
+    { calendar:{ name:"Where I have lived", color:{kind:"preset",name:"slate"}, length:90, startDate:"1995-06-12" },
+      events:[
+        { name:"Ohio", startDate:"1995-06-12", endDate:"2013-08-15", color:{kind:"preset",name:"orange"} },
+        { name:"Chicago", startDate:"2013-08-16", endDate:"2019-05-31", color:{kind:"preset",name:"sky"} },
+        { name:"Denver", startDate:"2019-06-01", color:{kind:"preset",name:"green"} }
+      ]},
+    { calendar:{ name:"Work", color:{kind:"preset",name:"stone"}, length:90, startDate:"1995-06-12" },
+      events:[
+        { name:"Barista", startDate:"2011-06-01", endDate:"2013-08-01", color:{kind:"preset",name:"amber"} },
+        { name:"Analyst, Acme Co", startDate:"2017-06-05", endDate:"2021-02-26", color:{kind:"preset",name:"indigo"} },
+        { name:"Product Manager", startDate:"2021-03-01", color:{kind:"preset",name:"violet"} }
+      ]}
+  ]
+};
+
+/* ---------- state ---------- */
+const state = {
+  data: null,          // lifecalendar.io-shaped object
+  active: 0,           // index of active calendar
+  viewOnly: false,     // true when viewing a shared link
+  rangeMode: false,
+  rangeStart: null,
+  paint: null,         // cache from last grid render
+  zoom: null           // null = auto
+};
+
+/* ---------- tiny helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); return true; } catch { return false; } },
+  del(k){ try { localStorage.removeItem(k); } catch {} }
+};
+function newId(){
+  const b = new Uint8Array(12); crypto.getRandomValues(b);
+  return [...b].map(x => x.toString(16).padStart(2,"0")).join("");
+}
+function clampInt(v, lo, hi, dflt){ const n = parseInt(v,10); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt; }
+function defaultTZ(){ try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "UTC"; } }
+function colorHex(c){
+  if (!c) return PRESETS.slate;
+  if (PRESETS[c.name]) return PRESETS[c.name];
+  const h = c.hex || c.value;
+  return (typeof h === "string" && /^#[0-9a-f]{6}$/i.test(h)) ? h : PRESETS.slate;
+}
+
+/* ---------- dates (all math in UTC day numbers, no DST surprises) ---------- */
+function isISO(s){
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y,m,d] = s.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m-1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m-1 && t.getUTCDate() === d;
+}
+function dn(s){ const [y,m,d] = s.split("-").map(Number); return Date.UTC(y, m-1, d) / DAY; }
+function iso(n){ return new Date(n*DAY).toISOString().slice(0,10); }
+function nice(n){ return new Date(n*DAY).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric",timeZone:"UTC"}); }
+function monthYr(n){ return new Date(n*DAY).toLocaleDateString(undefined,{month:"short",year:"numeric",timeZone:"UTC"}); }
+function today(){
+  const tz = state.data?.preferences?.timezone;
+  try {
+    return dn(new Intl.DateTimeFormat("en-CA",{timeZone:tz||undefined,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()));
+  } catch {
+    return dn(new Date().toISOString().slice(0,10));
+  }
+}
+function birthParts(s){ const [y,m,d] = s.split("-").map(Number); return {y,m,d}; }
+function anniv(b, n){ return Date.UTC(b.y + n, b.m - 1, b.d) / DAY; }
+
+/* A row is one year of age (birthday to birthday). A column is a week within that year.
+   Week 52 absorbs the 1 or 2 leftover days so every year has exactly 52 squares. */
+function cellOf(day, b){
+  let n = new Date(day*DAY).getUTCFullYear() - b.y;
+  if (anniv(b, n) > day) n--;
+  const w = Math.min(WEEKS - 1, Math.floor((day - anniv(b, n)) / 7));
+  return { year:n, week:w, index:n*WEEKS + w };
+}
+function cellRange(year, week, b){
+  const start = anniv(b, year) + 7*week;
+  const end = week === WEEKS - 1 ? anniv(b, year + 1) - 1 : start + 6;
+  return { start, end };
+}
+
+/* ---------- data shape ---------- */
+function normalize(raw){
+  if (!raw || !Array.isArray(raw.calendars)) throw new Error('This file does not look like a Life Calendar backup (no "calendars" list).');
+  const prefs = Object.assign({ birthdate:null, timezone:defaultTZ(), displayPrecision:"week" }, raw.preferences || {});
+  if (!isISO(prefs.birthdate)) prefs.birthdate = null;
+  const calendars = raw.calendars.map(entry => {
+    const cal = Object.assign({}, entry.calendar || {});
+    cal.id = cal.id || newId();
+    cal.name = cal.name || "Untitled";
+    cal.length = clampInt(cal.length, 1, 120, 90);
+    cal.color = cal.color || {kind:"preset", name:"slate"};
+    if (cal.displayEventLabels === undefined) cal.displayEventLabels = true;
+    if (cal.displayCalendarName === undefined) cal.displayCalendarName = true;
+    const events = (entry.events || []).filter(e => e && isISO(e.startDate)).map(e => {
+      const ev = Object.assign({}, e);
+      ev.id = ev.id || newId();
+      ev.name = ev.name || "Untitled";
+      ev.calendar = cal.id;
+      ev.color = ev.color || {kind:"preset", name:"slate"};
+      if (!isISO(ev.endDate)) delete ev.endDate;
+      return ev;
+    });
+    return { calendar:cal, events };
+  });
+  if (!prefs.birthdate) prefs.birthdate = calendars.map(c => c.calendar.startDate).filter(isISO).sort()[0] || null;
+  if (!prefs.birthdate) throw new Error("The backup has no birthdate. Add one in Settings after creating a calendar.");
+  calendars.forEach(c => { if (!isISO(c.calendar.startDate)) c.calendar.startDate = prefs.birthdate; });
+  return {
+    format: raw.format || "lifecalendar.io",
+    version: raw.version || 1,
+    exportedAt: raw.exportedAt || new Date().toISOString(),
+    preferences: prefs,
+    calendars
+  };
+}
+function blankCalendar(name, colorName){
+  const now = new Date().toISOString();
+  return { calendar:{ id:newId(), name, color:{kind:"preset",name:colorName}, length:90,
+    displayEventLabels:true, quote:{}, displayCalendarName:true, startDate:state.data.preferences.birthdate,
+    access:{generalAccess:"restricted"}, createdAt:now, updatedAt:now }, events:[] };
+}
+const cal = () => state.data?.calendars[state.active];
+
+function save(){
+  if (state.viewOnly || !state.data) return;
+  const ok = store.set(STORAGE_KEY, JSON.stringify(state.data));
+  $("storageWarn").hidden = ok;
+}
+function commit(){ save(); render(); }
+
+/* ---------- painting ---------- */
+function paint(c){
+  const b = birthParts(c.calendar.startDate);
+  const total = c.calendar.length * WEEKS;
+  const cells = new Array(total).fill(null);
+  const starts = new Map();
+  const t = today();
+  const evs = [...c.events].sort((a,z) => a.startDate.localeCompare(z.startDate));
+  for (const e of evs){
+    const s = Math.max(dn(e.startDate), anniv(b, 0));
+    const en = e.endDate ? dn(e.endDate) : Math.max(t, s);
+    if (en < s) continue;
+    const a = cellOf(s, b).index;
+    if (a >= total) continue;
+    const z = Math.min(total - 1, cellOf(en, b).index);
+    for (let i = a; i <= z; i++) (cells[i] ||= []).push(e);
+    const row = Math.floor(a / WEEKS);
+    if (!starts.has(row)) starts.set(row, []);
+    starts.get(row).push(e);
+  }
+  const nowIdx = t < anniv(b,0) ? -1 : cellOf(t, b).index;
+  return { b, total, cells, starts, nowIdx, today:t };
+}
+
+/* ---------- rendering ---------- */
+function render(){
+  document.body.classList.toggle("view-only", state.viewOnly);
+  renderBanner();
+  const has = state.data && state.data.calendars.length;
+  $("btnExport").disabled = !state.data;
+  $("btnShare").disabled = !has;
+  $("btnPrint").disabled = !has;
+  $("btnWallpaper").disabled = !has;
+  $("btnImport").hidden = state.viewOnly;
+  $("btnSettings").hidden = state.viewOnly;
+  $("fab").hidden = !has || state.viewOnly;
+  renderTabs();
+  if (!has){
+    $("calHeader").innerHTML = ""; $("toolbar").innerHTML = ""; $("eventList").innerHTML = ""; $("grid").innerHTML = "";
+    if (!state.data) renderEmpty();
+    else $("calHeader").innerHTML = `<div class="empty"><p class="muted">No calendars yet.</p><div class="btns"><button class="primary" data-act="newcal" type="button">Create a calendar</button></div></div>`;
+    return;
+  }
+  if (state.active >= state.data.calendars.length) state.active = 0;
+  renderHeader(); renderToolbar(); renderEvents(); renderGrid();
+}
+
+function renderEmpty(){
+  $("calHeader").innerHTML = `
+    <div class="empty">
+      <h1 style="letter-spacing:.05em;text-transform:none">Your life in weeks</h1>
+      <p class="muted">Each row is a year of your life, each square a week. Fill the squares with the places, jobs and chapters that made you.</p>
+      <div class="btns">
+        <button class="primary" data-act="welcome" type="button">Get started</button>
+        <button data-act="import" type="button">Import a backup</button>
+        <button data-act="sample" type="button">See an example</button>
+      </div>
+    </div>`;
+}
+
+function renderBanner(){
+  const el = $("banner");
+  if (!state.viewOnly){ el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `<span>You're viewing a shared life calendar.</span>
+    <button data-act="keep" type="button">Save to my calendars</button>
+    <button data-act="leave" type="button">Back to mine</button>`;
+}
+
+function renderTabs(){
+  const cs = state.data?.calendars || [];
+  $("tabs").innerHTML = cs.map((c,i) =>
+    `<button type="button" class="tab ${i===state.active?"on":""}" data-tab="${i}"><i class="dot" style="background:${colorHex(c.calendar.color)}"></i>${esc(c.calendar.name)}</button>`
+  ).join("") + (state.data && !state.viewOnly ? `<button type="button" class="tab ghost" data-act="newcal">+ Calendar</button>` : "");
+}
+
+function renderHeader(){
+  const c = cal().calendar;
+  const p = paint(cal());
+  state.paint = p;
+  const total = p.total;
+  const lived = Math.max(0, Math.min(total, p.nowIdx + 1));
+  const pct = total ? (lived / total * 100).toFixed(1) : 0;
+  $("calHeader").innerHTML =
+    (c.displayCalendarName !== false ? `<h1>${esc(c.name)}</h1>` : "") +
+    `<p class="sub">${c.length}-year calendar · ${total.toLocaleString()} weeks total</p>` +
+    (p.nowIdx >= 0 && p.nowIdx < total
+      ? `<div class="progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+         <p class="stats">Week ${lived.toLocaleString()} of ${total.toLocaleString()} · ${pct}% lived · ${(total-lived).toLocaleString()} to go</p>`
+      : "");
+}
+
+function renderToolbar(){
+  if (state.viewOnly){ $("toolbar").innerHTML = `<span class="hint">Tap any week to see what was happening.</span>`; return; }
+  const rangeHint = !state.rangeMode ? "" :
+    `<span class="hint">${state.rangeStart === null ? "Tap the first week" : "Now tap the last week"}</span>`;
+  $("toolbar").innerHTML = `
+    <button type="button" class="primary only-desktop" data-act="newev">+ Event</button>
+    <button type="button" class="${state.rangeMode?"on":""}" data-act="range">${state.rangeMode ? "Cancel selecting" : "Select weeks"}</button>
+    ${rangeHint}
+    <span class="sp"></span>
+    <label>Zoom <input type="range" id="zoom" min="4" max="20" step="1" value="${state.zoom ?? autoCell()}"></label>
+    <button type="button" data-act="editcal">Calendar settings</button>`;
+}
+
+function renderEvents(){
+  const evs = [...cal().events].sort((a,z) => a.startDate.localeCompare(z.startDate));
+  $("eventList").innerHTML = evs.map(e =>
+    `<button type="button" class="chip" data-ev="${esc(e.id)}"><i class="dot" style="background:${colorHex(e.color)}"></i><b>${esc(e.name)}</b><span>${monthYr(dn(e.startDate))} – ${e.endDate ? monthYr(dn(e.endDate)) : "now"}</span></button>`
+  ).join("") || (state.viewOnly ? "" : `<span class="hint">No events yet. Add one, or tap "Select weeks" and tap two squares on the grid.</span>`);
+}
+
+function autoCell(){
+  const wrap = $("gridWrap").clientWidth || window.innerWidth;
+  const lw = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--lw")) || 120;
+  const gap = 2;
+  const avail = wrap - lw - 24 - gap * 54;
+  return Math.max(4, Math.min(16, Math.floor(avail / 52)));
+}
+function applyCell(){
+  const size = state.zoom ?? autoCell();
+  $("grid").style.setProperty("--cell", size + "px");
+  $("grid").style.setProperty("--gap", (size < 8 ? 1 : 2) + "px");
+  return size;
+}
+
+function renderGrid(){
+  const c = cal().calendar, p = state.paint;
+  const size = applyCell();
+  const small = size < 10;
+  const showLabels = c.displayEventLabels !== false;
+  let h = `<div></div><div></div>`;
+  for (let w = 1; w <= WEEKS; w++) h += `<div class="wk">${!small || w === 1 || w % 4 === 0 ? w : ""}</div>`;
+  for (let row = 0; row < c.length; row++){
+    const evs = showLabels ? (p.starts.get(row) || []) : [];
+    const lbl = evs.map(e => `<span><i style="background:${colorHex(e.color)}"></i>${esc(e.name)}</span>`).join(" ");
+    h += `<div class="lbl">${lbl}</div><div class="yr">${!small || size >= 7 || row % 5 === 0 ? row : ""}</div>`;
+    for (let w = 0; w < WEEKS; w++){
+      const i = row * WEEKS + w;
+      const evs2 = p.cells[i];
+      let cls = "c", style = "";
+      if (evs2){
+        cls += " f";
+        const a = colorHex(evs2[evs2.length - 1].color);
+        if (evs2.length > 1){
+          const b = colorHex(evs2[0].color);
+          style = ` style="--ev:${a};background:linear-gradient(135deg,${b} 50%,${a} 50%)"`;
+        } else style = ` style="--ev:${a}"`;
+      } else if (i < p.nowIdx) cls += " p";
+      if (i === p.nowIdx) cls += " now";
+      if (i === state.rangeStart) cls += " sel";
+      h += `<div class="${cls}" data-i="${i}"${style}></div>`;
+    }
+  }
+  $("grid").innerHTML = h;
+}
+
+/* ---------- dialogs ---------- */
+const dlg = $("dlg");
+function openDialog(html, bind, opts = {}){
+  dlg.classList.toggle("wide", !!opts.wide);
+  $("dlgBody").innerHTML = html;
+  if (!dlg.open) dlg.showModal();
+  bind && bind($("dlgBody"));
+}
+function closeDialog(){ if (dlg.open) dlg.close(); }
+dlg.addEventListener("click", e => { if (e.target === dlg) closeDialog(); });
+
+function swatchesHTML(color, includeCustom = true){
+  const isPreset = color && PRESETS[color.name] && color.kind !== "custom";
+  const customHex = !isPreset ? colorHex(color) : "#888888";
+  return `<div class="swatches">` + SWATCH_ORDER.map(n =>
+    `<label class="sw" title="${n}"><input type="radio" name="color" value="${n}" ${isPreset && color.name === n ? "checked" : ""}><span style="background:${PRESETS[n]}"></span></label>`
+  ).join("") + (includeCustom ? `<label class="sw custom"><input type="radio" name="color" value="custom" ${!isPreset ? "checked" : ""}><input type="color" id="fCustom" value="${customHex}">Custom</label>` : "") + `</div>`;
+}
+function readColor(root){
+  const v = root.querySelector('input[name=color]:checked')?.value || "slate";
+  if (v === "custom") return { kind:"custom", hex: root.querySelector("#fCustom").value };
+  return { kind:"preset", name:v };
+}
+function bindCustomPicker(root){
+  const cp = root.querySelector("#fCustom");
+  cp && cp.addEventListener("input", () => { root.querySelector('input[name=color][value=custom]').checked = true; });
+}
+function suggestColor(c){
+  const used = new Set(c.events.map(e => e.color?.name));
+  return SWATCH_ORDER.find(n => !used.has(n)) || "sky";
+}
+
+function openEventDialog(ev, preset = {}){
+  const c = cal();
+  const isNew = !ev;
+  const e = ev || { name:"", startDate:preset.start || "", endDate:preset.end || "", color:{kind:"preset", name:suggestColor(c)} };
+  const ongoing = !isNew && !e.endDate;
+  openDialog(`
+    <h2>${isNew ? "New event" : "Edit event"}</h2>
+    <p class="muted" style="margin:0">in ${esc(c.calendar.name)}</p>
+    <label>Name<input type="text" id="fName" value="${esc(e.name)}" placeholder="e.g. Kansas City, Finance Manager"></label>
+    <div class="row2">
+      <label>Start<input type="date" id="fStart" value="${esc(e.startDate || "")}"></label>
+      <label>End<input type="date" id="fEnd" value="${esc(e.endDate || "")}" ${ongoing ? "disabled" : ""}></label>
+    </div>
+    <label class="check"><input type="checkbox" id="fOngoing" ${ongoing ? "checked" : ""}> Still going (fills up to this week)</label>
+    <label>Color</label>${swatchesHTML(e.color)}
+    <p class="err" id="fErr"></p>
+    <div class="btns">
+      ${isNew ? "" : `<button type="button" class="danger" id="fDel">Delete</button>`}
+      <span class="sp"></span>
+      <button type="button" id="fCancel">Cancel</button>
+      <button type="button" class="primary" id="fSave">Save</button>
+    </div>`, root => {
+    bindCustomPicker(root);
+    const ong = root.querySelector("#fOngoing"), end = root.querySelector("#fEnd");
+    ong.addEventListener("change", () => { end.disabled = ong.checked; });
+    root.querySelector("#fCancel").onclick = closeDialog;
+    root.querySelector("#fDel")?.addEventListener("click", () => {
+      if (!confirm(`Delete "${e.name}"?`)) return;
+      c.events = c.events.filter(x => x.id !== e.id);
+      closeDialog(); commit();
+    });
+    root.querySelector("#fSave").onclick = () => {
+      const name = root.querySelector("#fName").value.trim();
+      const s = root.querySelector("#fStart").value;
+      const en = ong.checked ? "" : end.value;
+      const err = root.querySelector("#fErr");
+      if (!name) return err.textContent = "Give it a name.";
+      if (!isISO(s)) return err.textContent = "Pick a start date.";
+      if (!ong.checked && !isISO(en)) return err.textContent = "Pick an end date, or tick Still going.";
+      if (en && en < s) return err.textContent = "End date is before the start date.";
+      const now = new Date().toISOString();
+      const target = ev || { id:newId(), calendar:c.calendar.id, createdAt:now };
+      Object.assign(target, { name, startDate:s, color:readColor(root), updatedAt:now });
+      if (en) target.endDate = en; else delete target.endDate;
+      if (!ev) c.events.push(target);
+      closeDialog(); commit();
+    };
+    if (isNew) root.querySelector("#fName").focus();
+  });
+}
+
+function openWeekDialog(i){
+  const p = state.paint, c = cal();
+  const year = Math.floor(i / WEEKS), week = i % WEEKS;
+  const { start, end } = cellRange(year, week, p.b);
+  const diff = Math.round((start - (p.nowIdx >= 0 ? cellRange(Math.floor(p.nowIdx/WEEKS), p.nowIdx%WEEKS, p.b).start : p.today)) / 7);
+  const rel = i === p.nowIdx ? "This week" : diff < 0 ? `${(-diff).toLocaleString()} weeks ago` : `${diff.toLocaleString()} weeks from now`;
+  const evs = p.cells[i] || [];
+  openDialog(`
+    <h2>Age ${year} · Week ${week + 1}</h2>
+    <p class="muted" style="margin:0">${nice(start)} – ${nice(end)} · ${rel}</p>
+    <div style="margin-top:12px">${evs.map(e => `
+      <div class="ev-row"><i class="dot" style="background:${colorHex(e.color)}"></i>
+        <div class="grow"><b>${esc(e.name)}</b><br><span class="muted">${nice(dn(e.startDate))} – ${e.endDate ? nice(dn(e.endDate)) : "now"}</span></div>
+        ${state.viewOnly ? "" : `<button type="button" data-edit="${esc(e.id)}">Edit</button>`}
+      </div>`).join("") || `<p class="muted">Nothing recorded for this week in ${esc(c.calendar.name)}.</p>`}
+    </div>
+    <div class="nav-week" aria-label="Move to another week">
+      <button type="button" data-jump="-52" ${i - 52 < 0 ? "disabled" : ""}>‹ Year</button>
+      <button type="button" data-jump="-1" ${i - 1 < 0 ? "disabled" : ""}>‹ Week</button>
+      <button type="button" data-jump="now" ${p.nowIdx < 0 || p.nowIdx >= p.total ? "disabled" : ""}>Today</button>
+      <button type="button" data-jump="1" ${i + 1 >= p.total ? "disabled" : ""}>Week ›</button>
+      <button type="button" data-jump="52" ${i + 52 >= p.total ? "disabled" : ""}>Year ›</button>
+    </div>
+    <div class="btns">
+      <span class="sp"></span>
+      <button type="button" id="wClose">Close</button>
+      ${state.viewOnly ? "" : `<button type="button" class="primary" id="wAdd">Add event from this week</button>`}
+    </div>`, root => {
+    root.querySelector("#wClose").onclick = closeDialog;
+    root.querySelectorAll("[data-jump]").forEach(b => b.onclick = () => {
+      const j = b.dataset.jump;
+      const next = j === "now" ? p.nowIdx : i + Number(j);
+      if (next >= 0 && next < p.total) openWeekDialog(next);
+    });
+    root.querySelector("#wAdd")?.addEventListener("click", () => openEventDialog(null, { start:iso(start) }));
+    root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () =>
+      openEventDialog(c.events.find(e => e.id === b.dataset.edit)));
+  });
+}
+
+function openCalendarDialog(isNew){
+  const c = isNew ? null : cal();
+  const k = c ? c.calendar : { name:"", length:90, startDate:state.data.preferences.birthdate, color:{kind:"preset",name:"slate"}, displayEventLabels:true, displayCalendarName:true };
+  openDialog(`
+    <h2>${isNew ? "New calendar" : "Calendar settings"}</h2>
+    <label>Name<input type="text" id="cName" value="${esc(k.name)}" placeholder="e.g. Work, Where I have lived, Relationships"></label>
+    <div class="row2">
+      <label>Length (years)<input type="number" id="cLen" min="1" max="120" value="${k.length}"></label>
+      <label>Starts on<input type="date" id="cStart" value="${esc(k.startDate)}"></label>
+    </div>
+    <label>Color</label>${swatchesHTML(k.color)}
+    <label class="check"><input type="checkbox" id="cLabels" ${k.displayEventLabels !== false ? "checked" : ""}> Show event labels beside the grid</label>
+    <label class="check"><input type="checkbox" id="cTitle" ${k.displayCalendarName !== false ? "checked" : ""}> Show calendar name as title</label>
+    <p class="err" id="cErr"></p>
+    <div class="btns">
+      ${isNew ? "" : `<button type="button" class="danger" id="cDel">Delete calendar</button>`}
+      <span class="sp"></span>
+      <button type="button" id="cCancel">Cancel</button>
+      <button type="button" class="primary" id="cSave">Save</button>
+    </div>`, root => {
+    bindCustomPicker(root);
+    root.querySelector("#cCancel").onclick = closeDialog;
+    root.querySelector("#cDel")?.addEventListener("click", () => {
+      if (!confirm(`Delete "${k.name}" and its ${c.events.length} events? This can't be undone (unless you exported a backup).`)) return;
+      state.data.calendars.splice(state.active, 1);
+      state.active = Math.max(0, state.active - 1);
+      closeDialog(); commit();
+    });
+    root.querySelector("#cSave").onclick = () => {
+      const name = root.querySelector("#cName").value.trim();
+      const start = root.querySelector("#cStart").value;
+      const err = root.querySelector("#cErr");
+      if (!name) return err.textContent = "Give the calendar a name.";
+      if (!isISO(start)) return err.textContent = "Pick a start date (usually your birthday).";
+      const target = c || blankCalendar(name, "slate");
+      Object.assign(target.calendar, {
+        name, startDate:start,
+        length: clampInt(root.querySelector("#cLen").value, 1, 120, 90),
+        color: readColor(root),
+        displayEventLabels: root.querySelector("#cLabels").checked,
+        displayCalendarName: root.querySelector("#cTitle").checked,
+        updatedAt: new Date().toISOString()
+      });
+      if (!c){ state.data.calendars.push(target); state.active = state.data.calendars.length - 1; }
+      closeDialog(); commit();
+    };
+    root.querySelector("#cName").focus();
+  });
+}
+
+function openSettings(){
+  const p = state.data?.preferences || { birthdate:"", timezone:defaultTZ() };
+  openDialog(`
+    <h2>Settings</h2>
+    <label>Birthdate<input type="date" id="sBirth" value="${esc(p.birthdate || "")}"></label>
+    <label>Time zone<input type="text" id="sTz" value="${esc(p.timezone || defaultTZ())}" placeholder="America/Chicago"></label>
+    <p class="muted" style="font-size:12px">Changing your birthdate also moves any calendar that started on the old one.</p>
+    <p class="err" id="sErr"></p>
+    <div class="btns">
+      ${state.data ? `<button type="button" class="danger" id="sWipe">Erase all data</button>` : ""}
+      <span class="sp"></span>
+      <button type="button" id="sCancel">Cancel</button>
+      <button type="button" class="primary" id="sSave">Save</button>
+    </div>`, root => {
+    root.querySelector("#sCancel").onclick = closeDialog;
+    root.querySelector("#sWipe")?.addEventListener("click", () => {
+      if (!confirm("Erase every calendar stored in this browser? Export first if you want a copy.")) return;
+      store.del(STORAGE_KEY); state.data = null; state.active = 0; closeDialog(); render();
+    });
+    root.querySelector("#sSave").onclick = () => {
+      const b = root.querySelector("#sBirth").value, tz = root.querySelector("#sTz").value.trim() || defaultTZ();
+      const err = root.querySelector("#sErr");
+      if (!isISO(b)) return err.textContent = "Pick your birthdate.";
+      try { new Intl.DateTimeFormat("en", { timeZone:tz }); } catch { return err.textContent = "Unknown time zone. Try something like America/Chicago."; }
+      if (!state.data){ startFresh(b, tz); closeDialog(); return; }
+      const old = state.data.preferences.birthdate;
+      state.data.preferences.birthdate = b; state.data.preferences.timezone = tz;
+      state.data.calendars.forEach(c => { if (c.calendar.startDate === old) c.calendar.startDate = b; });
+      closeDialog(); commit();
+    };
+  });
+}
+
+function openWelcome(){
+  openDialog(`
+    <h2>Welcome</h2>
+    <p class="muted">When were you born? Everything is laid out from that day, one square per week.</p>
+    <label>Birthdate<input type="date" id="wBirth"></label>
+    <p class="err" id="wErr"></p>
+    <div class="btns">
+      <button type="button" id="wImport">Import backup instead</button>
+      <span class="sp"></span>
+      <button type="button" class="primary" id="wGo">Start</button>
+    </div>`, root => {
+    root.querySelector("#wImport").onclick = () => { closeDialog(); $("fileInput").click(); };
+    root.querySelector("#wGo").onclick = () => {
+      const b = root.querySelector("#wBirth").value;
+      if (!isISO(b)) return root.querySelector("#wErr").textContent = "Pick your birthdate to begin.";
+      startFresh(b, defaultTZ()); closeDialog();
+    };
+  });
+}
+
+function startFresh(birthdate, tz){
+  state.data = { format:"lifecalendar.io", version:1, exportedAt:new Date().toISOString(),
+    preferences:{ birthdate, timezone:tz, displayPrecision:"week" }, calendars:[] };
+  state.data.calendars.push(blankCalendar("Where I have lived", "slate"));
+  state.data.calendars.push(blankCalendar("Work", "stone"));
+  state.active = 0; commit();
+}
+
+/* ---------- mobile menu ---------- */
+function openMenu(){
+  const has = !!(state.data && state.data.calendars.length);
+  const item = (act, ico, title, sub, on = true) => on
+    ? `<button type="button" data-menu="${act}"><span class="ico">${ico}</span><span>${title}<small>${sub}</small></span></button>` : "";
+  openDialog(`
+    <h2>Menu</h2>
+    <div class="menu-list">
+      ${item("wallpaper", "▦", "Make a wallpaper", "Lock or home screen image for your phone", has)}
+      ${item("share", "↗", "Share", "Read-only link to one or all calendars", has)}
+      ${item("import", "↓", "Import backup", "Load a lifecalendar.io or Life in Weeks file", !state.viewOnly)}
+      ${item("export", "↑", "Export backup", "Download all your calendars as JSON", !!state.data)}
+      ${item("print", "⎙", "Print", "Poster layout of this calendar", has)}
+      ${item("settings", "⚙", "Settings", "Birthdate and time zone", !state.viewOnly)}
+    </div>
+    <div class="btns"><button type="button" id="mClose">Close</button></div>`, root => {
+    root.querySelector("#mClose").onclick = closeDialog;
+    root.querySelectorAll("[data-menu]").forEach(b => b.onclick = () => {
+      const a = b.dataset.menu;
+      if (a === "import"){ closeDialog(); $("fileInput").click(); }
+      else if (a === "export"){ closeDialog(); exportJSON(); }
+      else if (a === "print"){ closeDialog(); setTimeout(() => window.print(), 250); }
+      else if (a === "wallpaper") openWallpaper();
+      else if (a === "share") openShare();
+      else if (a === "settings") openSettings();
+    });
+  });
+}
+
+/* ---------- phone wallpaper ---------- */
+const DEVICES = [
+  { id:"1320x2868", label:"iPhone 16 Pro Max · 17 Pro Max", w:1320, h:2868 },
+  { id:"1206x2622", label:"iPhone 16 Pro · 17 · 17 Pro", w:1206, h:2622 },
+  { id:"1260x2736", label:"iPhone Air", w:1260, h:2736 },
+  { id:"1290x2796", label:"iPhone 14 Pro Max · 15 Plus · 15 Pro Max · 16 Plus", w:1290, h:2796 },
+  { id:"1179x2556", label:"iPhone 14 Pro · 15 · 15 Pro · 16", w:1179, h:2556 },
+  { id:"1170x2532", label:"iPhone 12 · 13 · 14", w:1170, h:2532 },
+  { id:"1080x2340", label:"iPhone 12 mini · 13 mini", w:1080, h:2340 },
+  { id:"750x1334",  label:"iPhone SE", w:750, h:1334 },
+  { id:"1080x2400", label:"Android (1080 × 2400)", w:1080, h:2400 }
+];
+const WP_THEMES = {
+  dark:     { bg:"#0c0a09", ink:"#f5f5f4", muted:"#8a837e", lived:"#3d3835", future:"#252220", now:"#ef4444" },
+  midnight: { bg:"#0b1220", ink:"#e8edf7", muted:"#7f8aa3", lived:"#2c3650", future:"#151d2e", now:"#f59e0b" },
+  light:    { bg:"#f6f4f1", ink:"#1c1917", muted:"#857d77", lived:"#cfcac5", future:"#e8e4e0", now:"#ef4444" },
+  sand:     { bg:"#efe6d8", ink:"#3b2f25", muted:"#8c7b69", lived:"#c9b8a2", future:"#e3d7c5", now:"#c2410c" }
+};
+const WP_KEY = "life-in-weeks:wallpaper";
+
+function guessDevice(){
+  const w = Math.round(screen.width * (window.devicePixelRatio || 1));
+  const h = Math.round(screen.height * (window.devicePixelRatio || 1));
+  const hit = DEVICES.find(d => (d.w === w && d.h === h) || (d.w === h && d.h === w));
+  return hit ? hit.id : "1206x2622";
+}
+
+function wallpaperOptions(){
+  let saved = {};
+  try { saved = JSON.parse(store.get(WP_KEY) || "{}"); } catch {}
+  return Object.assign({ device:guessDevice(), layout:"lock", theme:"dark", title:true, legend:true, stats:true, caption:"" }, saved, { cal:state.active });
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+
+function drawWallpaper(canvas, o){
+  const dev = DEVICES.find(d => d.id === o.device) || DEVICES[1];
+  const W = dev.w, H = dev.h, T = WP_THEMES[o.theme] || WP_THEMES.dark;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const c = state.data.calendars[o.cal] || cal();
+  const p = paint(c);
+  const rows = c.calendar.length;
+  const u = W / 1179;                      // scale unit relative to a typical iPhone width
+  // Prefer the phone's system font; fall back to a plain stack if the canvas rejects it.
+  const font = (px, weight = 600) => {
+    const size = `${weight} ${Math.round(px * u)}px`;
+    ctx.font = `${size} system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+    if (!ctx.font.includes(`${Math.round(px * u)}px`)) ctx.font = `${size} "Helvetica Neue", Helvetica, Arial, sans-serif`;
+    return ctx.font;
+  };
+  const spaced = (px) => { if ("letterSpacing" in ctx) ctx.letterSpacing = `${(px * u).toFixed(1)}px`; };
+
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, W, H);
+
+  // Lock screen keeps the clock (top ~32%) and the flashlight/camera row (bottom ~11%) clear.
+  const top = o.layout === "lock" ? H * 0.33 : H * 0.10;
+  const bottomPad = o.layout === "lock" ? H * 0.115 : H * 0.12;
+
+  // Legend: unique events in this calendar, oldest first.
+  const seen = new Set(), legend = [];
+  [...c.events].sort((a, z) => a.startDate.localeCompare(z.startDate)).forEach(e => {
+    const k = e.name + "|" + colorHex(e.color);
+    if (!seen.has(k)){ seen.add(k); legend.push({ name:e.name, hex:colorHex(e.color) }); }
+  });
+
+  // Lay out the legend into lines to know its height.
+  const legendFont = 30, dot = 18 * u, gapX = 34 * u, lineH = 50 * u;
+  const maxLineW = W * 0.84;
+  const lines = [];
+  if (o.legend && legend.length){
+    ctx.font = font(legendFont, 600); spaced(1.5);
+    let line = [], lw = 0;
+    for (const it of legend){
+      const label = it.name.toUpperCase();
+      const w = dot + 12 * u + ctx.measureText(label).width;
+      if (line.length && lw + gapX + w > maxLineW){ lines.push({ items:line, w:lw }); line = []; lw = 0; }
+      lw += (line.length ? gapX : 0) + w; line.push({ ...it, label, w });
+    }
+    if (line.length) lines.push({ items:line, w:lw });
+    if (lines.length > 3) lines.length = 3;
+  }
+
+  const titleH = o.title ? 78 * u : 0;
+  const statsH = o.stats && p.nowIdx >= 0 ? 64 * u : 0;
+  const captionH = o.caption ? 60 * u : 0;
+  const legendH = lines.length ? lines.length * lineH + 26 * u : 0;
+  const gridAvailH = H - top - bottomPad - titleH - statsH - captionH - legendH;
+  const pitch = Math.max(2, Math.min((W * 0.84) / 52, gridAvailH / rows));
+  const cell = pitch * 0.76, rad = cell * 0.24;
+  const gridW = pitch * 52 - (pitch - cell), gridH = pitch * rows - (pitch - cell);
+  const x0 = (W - gridW) / 2;
+
+  // Center the whole block vertically inside the free area.
+  const blockH = titleH + gridH + statsH + captionH + legendH;
+  let y = top + Math.max(0, (H - top - bottomPad - blockH) / 2);
+
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  if (o.title){
+    ctx.fillStyle = T.ink; ctx.font = font(34, 700); spaced(8);
+    ctx.fillText(c.calendar.name.toUpperCase(), W / 2, y + 40 * u);
+    y += titleH;
+  }
+
+  for (let r = 0; r < rows; r++){
+    for (let w = 0; w < 52; w++){
+      const i = r * 52 + w;
+      const evs = p.cells[i];
+      const x = x0 + w * pitch, yy = y + r * pitch;
+      if (evs){
+        const a = colorHex(evs[evs.length - 1].color);
+        if (evs.length > 1){
+          const g = ctx.createLinearGradient(x, yy, x + cell, yy + cell);
+          const b = colorHex(evs[0].color);
+          g.addColorStop(0, b); g.addColorStop(.5, b); g.addColorStop(.5, a); g.addColorStop(1, a);
+          ctx.fillStyle = g;
+        } else ctx.fillStyle = a;
+        if (i > p.nowIdx) ctx.globalAlpha = 0.35;   // planned future events read lighter
+      } else {
+        ctx.fillStyle = i < p.nowIdx ? T.lived : T.future;
+      }
+      roundRect(ctx, x, yy, cell, cell, rad); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (p.nowIdx >= 0 && p.nowIdx < p.total){
+    const r = Math.floor(p.nowIdx / 52), w = p.nowIdx % 52;
+    const x = x0 + w * pitch, yy = y + r * pitch, pad = Math.max(2, pitch * 0.22);
+    ctx.fillStyle = T.now; roundRect(ctx, x, yy, cell, cell, rad); ctx.fill();
+    ctx.strokeStyle = T.now; ctx.lineWidth = Math.max(2, 3 * u);
+    roundRect(ctx, x - pad, yy - pad, cell + pad * 2, cell + pad * 2, rad + pad); ctx.stroke();
+  }
+  y += gridH;
+
+  if (statsH){
+    const lived = p.nowIdx + 1, pct = (lived / p.total * 100).toFixed(1);
+    ctx.fillStyle = T.muted; ctx.font = font(28, 600); spaced(2);
+    ctx.fillText(`WEEK ${lived.toLocaleString()} OF ${p.total.toLocaleString()}  ·  ${pct}%`, W / 2, y + 48 * u);
+    y += statsH;
+  }
+  if (captionH){
+    ctx.fillStyle = T.ink; ctx.font = font(32, 500); spaced(0.5);
+    ctx.fillText(o.caption, W / 2, y + 44 * u, W * 0.86);
+    y += captionH;
+  }
+  if (lines.length){
+    y += 26 * u;
+    ctx.font = font(legendFont, 600); spaced(1.5); ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    for (const ln of lines){
+      let x = (W - ln.w) / 2;
+      const cy = y + lineH / 2;
+      for (const it of ln.items){
+        ctx.fillStyle = it.hex; ctx.beginPath(); ctx.arc(x + dot / 2, cy, dot / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = T.ink; ctx.fillText(it.label, x + dot + 12 * u, cy + 1);
+        x += it.w + gapX;
+      }
+      y += lineH;
+    }
+  }
+  if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+  return dev;
+}
+
+function openWallpaper(){
+  const o = wallpaperOptions();
+  const cals = state.data.calendars;
+  const radio = (name, val, label) => `<label><input type="radio" name="${name}" value="${val}" ${o[name] === val ? "checked" : ""}><span>${label}</span></label>`;
+  openDialog(`
+    <h2>Phone wallpaper</h2>
+    <p class="muted" style="margin:0">A snapshot of this week. Make a fresh one every so often to watch it fill in.</p>
+    <div class="wp-wrap">
+      <div>
+        ${cals.length > 1 ? `<label>Calendar<select id="wpCal">${cals.map((c, i) => `<option value="${i}" ${i === o.cal ? "selected" : ""}>${esc(c.calendar.name)}</option>`).join("")}</select></label>` : ""}
+        <label>Phone<select id="wpDevice">${DEVICES.map(d => `<option value="${d.id}" ${d.id === o.device ? "selected" : ""}>${d.label}</option>`).join("")}</select></label>
+        <label>Made for</label>
+        <div class="seg">${radio("layout", "lock", "Lock screen")}${radio("layout", "home", "Home screen")}</div>
+        <label>Style</label>
+        <div class="theme-row">${Object.entries(WP_THEMES).map(([k, t]) =>
+          `<label title="${k}"><input type="radio" name="theme" value="${k}" ${o.theme === k ? "checked" : ""}><span style="background:linear-gradient(135deg,${t.bg} 55%,${t.lived} 55%)"></span></label>`).join("")}</div>
+        <label class="check"><input type="checkbox" id="wpTitle" ${o.title ? "checked" : ""}> Calendar name</label>
+        <label class="check"><input type="checkbox" id="wpStats" ${o.stats ? "checked" : ""}> Week count</label>
+        <label class="check"><input type="checkbox" id="wpLegend" ${o.legend ? "checked" : ""}> Color legend</label>
+        <label>Caption (optional)<input type="text" id="wpCaption" maxlength="60" value="${esc(o.caption)}" placeholder="Make the weeks count"></label>
+      </div>
+      <div class="wp-preview">
+        <img id="wpImg" alt="Wallpaper preview">
+        <p id="wpHint">On iPhone, tap Save, then "Save Image". Or press and hold the preview.</p>
+      </div>
+    </div>
+    <div class="btns">
+      <span class="sp"></span>
+      <button type="button" id="wpClose">Close</button>
+      <button type="button" class="primary" id="wpSave">Save</button>
+    </div>`, root => {
+    const canvas = document.createElement("canvas");
+    let blob = null, url = null, dev = null, timer;
+    const read = () => {
+      o.cal = root.querySelector("#wpCal") ? +root.querySelector("#wpCal").value : state.active;
+      o.device = root.querySelector("#wpDevice").value;
+      o.layout = root.querySelector('input[name=layout]:checked').value;
+      o.theme = root.querySelector('input[name=theme]:checked').value;
+      o.title = root.querySelector("#wpTitle").checked;
+      o.stats = root.querySelector("#wpStats").checked;
+      o.legend = root.querySelector("#wpLegend").checked;
+      o.caption = root.querySelector("#wpCaption").value.trim();
+      const { cal:_, ...keep } = o; store.set(WP_KEY, JSON.stringify(keep));
+    };
+    const redraw = () => {
+      read();
+      dev = drawWallpaper(canvas, o);
+      root.querySelector("#wpImg").style.setProperty("--ar", `${dev.w}/${dev.h}`);
+      canvas.toBlob(b => {
+        blob = b;
+        if (url) URL.revokeObjectURL(url);
+        url = URL.createObjectURL(b);
+        root.querySelector("#wpImg").src = url;
+      }, "image/png");
+    };
+    root.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(redraw, 120); });
+    root.addEventListener("change", () => { clearTimeout(timer); redraw(); });
+    root.querySelector("#wpClose").onclick = closeDialog;
+    root.querySelector("#wpSave").onclick = async () => {
+      if (!blob) return;
+      const c = state.data.calendars[o.cal] || cal();
+      const name = `life-in-weeks-${c.calendar.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${iso(today())}.png`;
+      const file = new File([blob], name, { type:"image/png" });
+      if (navigator.canShare && navigator.canShare({ files:[file] })){
+        try { await navigator.share({ files:[file] }); return; }
+        catch (err){ if (err && err.name === "AbortError") return; }
+      }
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+    redraw();
+  }, { wide:true });
+}
+
+/* ---------- import / export / share ---------- */
+async function handleFile(file){
+  let incoming;
+  try { incoming = normalize(JSON.parse(await file.text())); }
+  catch (e){ alert(e.message || "Couldn't read that file."); return; }
+  const nEv = incoming.calendars.reduce((s,c) => s + c.events.length, 0);
+  const summary = `${incoming.calendars.length} calendar${incoming.calendars.length === 1 ? "" : "s"}, ${nEv} events, birthdate ${incoming.preferences.birthdate}`;
+  if (!state.data){ state.data = incoming; state.active = 0; commit(); return; }
+  openDialog(`
+    <h2>Import backup</h2>
+    <p class="muted">Found ${esc(summary)}.</p>
+    <div class="btns">
+      <button type="button" id="iCancel">Cancel</button>
+      <span class="sp"></span>
+      <button type="button" id="iAdd">Add alongside mine</button>
+      <button type="button" class="primary" id="iReplace">Replace everything</button>
+    </div>`, root => {
+    root.querySelector("#iCancel").onclick = closeDialog;
+    root.querySelector("#iReplace").onclick = () => { state.data = incoming; state.active = 0; closeDialog(); commit(); };
+    root.querySelector("#iAdd").onclick = () => {
+      const ids = new Set(state.data.calendars.map(c => c.calendar.id));
+      incoming.calendars.forEach(c => {
+        if (ids.has(c.calendar.id)){ c.calendar.id = newId(); c.events.forEach(e => e.calendar = c.calendar.id); }
+        state.data.calendars.push(c);
+      });
+      closeDialog(); commit();
+    };
+  });
+}
+
+function exportJSON(){
+  const out = Object.assign({}, state.data, { exportedAt:new Date().toISOString() });
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `life-calendars-backup-${iso(today())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function b64u(bytes){
+  let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function unb64u(s){
+  s = s.replace(/-/g,"+").replace(/_/g,"/"); while (s.length % 4) s += "=";
+  return Uint8Array.from(atob(s), ch => ch.charCodeAt(0));
+}
+async function encodeShare(obj){
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  if ("CompressionStream" in window){
+    try {
+      const st = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+      return "z" + b64u(new Uint8Array(await new Response(st).arrayBuffer()));
+    } catch {}
+  }
+  return "j" + b64u(bytes);
+}
+async function decodeShare(s){
+  let bytes = unb64u(s.slice(1));
+  if (s[0] === "z"){
+    const st = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    bytes = new Uint8Array(await new Response(st).arrayBuffer());
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function compactForShare(which){
+  const pick = which === "all" ? state.data.calendars : [cal()];
+  return {
+    format:"lifecalendar.io", version:1, preferences:state.data.preferences,
+    calendars: pick.map(c => ({
+      calendar:{ name:c.calendar.name, color:c.calendar.color, length:c.calendar.length, startDate:c.calendar.startDate,
+        displayEventLabels:c.calendar.displayEventLabels, displayCalendarName:c.calendar.displayCalendarName },
+      events:c.events.map(e => { const o = { name:e.name, startDate:e.startDate, color:e.color }; if (e.endDate) o.endDate = e.endDate; return o; })
+    }))
+  };
+}
+function openShare(){
+  openDialog(`
+    <h2>Share</h2>
+    <p class="muted">Anyone with the link sees a read-only copy. The data lives inside the link itself, so nothing is uploaded, but it does include your birthdate and every event you share.</p>
+    <label>What to share<select id="shWhich"><option value="one">Just "${esc(cal().calendar.name)}"</option><option value="all">All calendars</option></select></label>
+    <label>Link<textarea id="shLink" readonly></textarea></label>
+    <div class="btns"><span class="sp"></span><button type="button" id="shClose">Close</button><button type="button" class="primary" id="shCopy">Copy link</button></div>`, root => {
+    const ta = root.querySelector("#shLink"), sel = root.querySelector("#shWhich");
+    const build = async () => {
+      ta.value = "Building link…";
+      ta.value = location.origin + location.pathname + "#v=" + await encodeShare(compactForShare(sel.value));
+    };
+    sel.onchange = build; build();
+    root.querySelector("#shClose").onclick = closeDialog;
+    root.querySelector("#shCopy").onclick = async (ev) => {
+      try { await navigator.clipboard.writeText(ta.value); ev.target.textContent = "Copied"; }
+      catch { ta.select(); ev.target.textContent = "Select and copy"; }
+    };
+  });
+}
+
+function loadLocal(){
+  const raw = store.get(STORAGE_KEY);
+  if (!raw){ state.data = null; return; }
+  try { state.data = normalize(JSON.parse(raw)); } catch { state.data = null; }
+}
+function leaveShared(){
+  history.replaceState(null, "", location.pathname + location.search);
+  state.viewOnly = false; state.active = 0; loadLocal(); render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-act],[data-tab],[data-ev]");
+  if (!t) return;
+  if (t.dataset.tab !== undefined){
+    state.active = +t.dataset.tab; state.rangeMode = false; state.rangeStart = null; render(); return;
+  }
+  if (t.dataset.ev !== undefined){
+    if (state.viewOnly) return;
+    openEventDialog(cal().events.find(x => x.id === t.dataset.ev)); return;
+  }
+  switch (t.dataset.act){
+    case "newcal": openCalendarDialog(true); break;
+    case "editcal": openCalendarDialog(false); break;
+    case "newev": openEventDialog(null); break;
+    case "range": state.rangeMode = !state.rangeMode; state.rangeStart = null; renderToolbar(); renderGrid(); break;
+    case "welcome": openWelcome(); break;
+    case "import": $("fileInput").click(); break;
+    case "sample": state.data = normalize(JSON.parse(JSON.stringify(SAMPLE))); state.active = 0; commit(); break;
+    case "keep": {
+      const shared = state.data;
+      history.replaceState(null, "", location.pathname + location.search);
+      state.viewOnly = false; loadLocal();
+      if (!state.data) state.data = shared;
+      else shared.calendars.forEach(c => { c.calendar.id = newId(); c.events.forEach(ev => ev.calendar = c.calendar.id); state.data.calendars.push(c); });
+      state.active = 0; commit(); break;
+    }
+    case "leave": leaveShared(); break;
+  }
+});
+
+$("grid").addEventListener("click", e => {
+  const cell = e.target.closest(".c"); if (!cell) return;
+  const i = +cell.dataset.i;
+  if (state.rangeMode && !state.viewOnly){
+    if (state.rangeStart === null){ state.rangeStart = i; renderToolbar(); cell.classList.add("sel"); return; }
+    const a = Math.min(state.rangeStart, i), z = Math.max(state.rangeStart, i);
+    const b = state.paint.b;
+    const s = cellRange(Math.floor(a/WEEKS), a%WEEKS, b).start, en = cellRange(Math.floor(z/WEEKS), z%WEEKS, b).end;
+    state.rangeMode = false; state.rangeStart = null; renderToolbar(); renderGrid();
+    openEventDialog(null, { start:iso(s), end:iso(en) });
+    return;
+  }
+  openWeekDialog(i);
+});
+$("grid").addEventListener("mouseover", e => {
+  const cell = e.target.closest(".c"); if (!cell || cell.title) return;
+  const i = +cell.dataset.i, p = state.paint;
+  const { start } = cellRange(Math.floor(i/WEEKS), i%WEEKS, p.b);
+  const names = (p.cells[i] || []).map(x => x.name).join(", ");
+  cell.title = `Age ${Math.floor(i/WEEKS)}, week ${i%WEEKS + 1} · ${nice(start)}${names ? " · " + names : ""}`;
+});
+document.addEventListener("input", e => {
+  if (e.target.id !== "zoom") return;
+  state.zoom = +e.target.value; store.set(ZOOM_KEY, String(state.zoom));
+  renderGrid();
+});
+
+$("btnImport").onclick = () => $("fileInput").click();
+$("fileInput").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) handleFile(f); };
+$("btnExport").onclick = exportJSON;
+$("btnShare").onclick = openShare;
+$("btnPrint").onclick = () => window.print();
+$("btnSettings").onclick = openSettings;
+$("btnWallpaper").onclick = openWallpaper;
+$("btnMenu").onclick = openMenu;
+
+let resizeT;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { if (state.zoom === null && cal()) renderGrid(); }, 150);
+});
+window.addEventListener("hashchange", async () => {
+  if (location.hash.startsWith("#v=")) await init();
+});
+
+async function init(){
+  const z = parseInt(store.get(ZOOM_KEY), 10);
+  state.zoom = Number.isFinite(z) ? z : null;
+  state.viewOnly = false;
+  if (location.hash.startsWith("#v=")){
+    try { state.data = normalize(await decodeShare(location.hash.slice(3))); state.viewOnly = true; state.active = 0; }
+    catch { alert("That share link couldn't be read. It may have been cut off when copied."); history.replaceState(null, "", location.pathname + location.search); }
+  }
+  if (!state.viewOnly) loadLocal();
+  render();
+}
+init();
+</script>
+</body>
+</html>

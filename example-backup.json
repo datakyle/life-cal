@@ -1,0 +1,23 @@
+{
+  "format": "lifecalendar.io",
+  "version": 1,
+  "preferences": { "birthdate": "1995-06-12", "timezone": "America/Chicago", "displayPrecision": "week" },
+  "calendars": [
+    {
+      "calendar": { "name": "Where I have lived", "color": { "kind": "preset", "name": "slate" }, "length": 90, "startDate": "1995-06-12" },
+      "events": [
+        { "name": "Ohio", "startDate": "1995-06-12", "endDate": "2013-08-15", "color": { "kind": "preset", "name": "orange" } },
+        { "name": "Chicago", "startDate": "2013-08-16", "endDate": "2019-05-31", "color": { "kind": "preset", "name": "sky" } },
+        { "name": "Denver", "startDate": "2019-06-01", "color": { "kind": "preset", "name": "green" } }
+      ]
+    },
+    {
+      "calendar": { "name": "Work", "color": { "kind": "preset", "name": "stone" }, "length": 90, "startDate": "1995-06-12" },
+      "events": [
+        { "name": "Barista", "startDate": "2011-06-01", "endDate": "2013-08-01", "color": { "kind": "preset", "name": "amber" } },
+        { "name": "Analyst, Acme Co", "startDate": "2017-06-05", "endDate": "2021-02-26", "color": { "kind": "preset", "name": "indigo" } },
+        { "name": "Product Manager", "startDate": "2021-03-01", "color": { "kind": "preset", "name": "violet" } }
+      ]
+    }
+  ]
+}
