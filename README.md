@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.svg" alt="Life in Weeks logo" width="132" height="132"></p>
+
 # Life in Weeks
 
 **Your whole life on one screen. One square per week. Color in the chapters.**

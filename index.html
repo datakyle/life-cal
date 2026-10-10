@@ -41,9 +41,7 @@ input[type=text],input[type=date],input[type=number],select{width:100%;padding:8
 
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
 .brand{font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
-.logo{display:grid;grid-template-columns:repeat(3,5px);gap:2px}
-.logo i{width:5px;height:5px;border-radius:1px;background:var(--ink)}
-.logo i:nth-child(n+5){background:transparent;outline:1px solid var(--muted);outline-offset:-1px}
+.logo{display:block;width:26px;height:26px;flex:none}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
 
 .banner{padding:10px 16px;background:#fef3c7;color:#78350f;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -224,7 +222,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px))}
 </head>
 <body>
 <header class="top no-print">
-  <div class="brand"><span class="logo"><i></i><i></i><i></i><i></i><i></i><i></i></span>Life in Weeks
+  <div class="brand"><img class="logo" src="icon.svg" alt="" width="26" height="26">Life in Weeks
     <button type="button" id="saveStatus" class="save-pill ok" hidden aria-label="Saving and backups"></button></div>
   <div class="actions">
     <button id="btnWallpaper" type="button">Wallpaper</button>
