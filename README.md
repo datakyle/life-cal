@@ -6,9 +6,7 @@
 
 ### ▶ [Open the app](https://datakyle.github.io/life-cal/)
 
-<!-- Add a screenshot at docs/screenshot.png, then uncomment:
-<img src="docs/screenshot.png" alt="A grid of weekly squares with colored bands for different life chapters" width="400">
--->
+<p align="center"><img src="screenshot.PNG" alt="A grid of weekly squares with colored bands for different life chapters" width="300"></p>
 
 Every row is a year. Every square is a week. Colored bubbles show where you lived, what you worked on, who you were with. The current week glows red.
 
